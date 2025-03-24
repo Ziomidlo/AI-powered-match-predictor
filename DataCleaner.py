@@ -31,10 +31,23 @@ os.makedirs("cleaned_data", exist_ok=True)
 selectedSeasons = ["2020/2021", "2021/2022", "2022/2023", "2023/2024"]
 
 teamsDf = pd.read_csv("teams.csv")
-teamsDf = teamsDf.rename(columns={'id' : 'Id'}, inplace=True)
-teamsDf = teamsDf.rename(columns={'team' : 'Team'})
 teamsDf['Team'] = teamsDf['Team'].replace(teamNameMapping)
 teamsDf.info()
+
+teamMapping = dict(zip(teamsDf['Team'], teamsDf['Id']))
+
+def getTeamId(teamName):
+    return teamMapping.get(teamName, -1)
+
+def getResult(homeGoals, awayGoals):
+    if homeGoals > awayGoals:
+      result = "Home Win"
+    elif homeGoals < awayGoals:
+       result = "Away Win"
+    else:
+       result = "Draw"
+    return result
+
 
 
 seasonStatsDf = pd.read_csv("seasonstats.csv")
@@ -42,8 +55,14 @@ filteredSeasonStatsDf = seasonStatsDf[seasonStatsDf['Season'].isin(selectedSeaso
 filteredSeasonStatsDf = filteredSeasonStatsDf.drop('Unnamed: 0', axis=1)
 filteredSeasonStatsDf = filteredSeasonStatsDf.rename(columns={'Squad' : 'Team'})
 filteredSeasonStatsDf['Team'] = filteredSeasonStatsDf['Team'].replace(teamNameMapping)
+filteredSeasonStatsDf['GD'] = filteredSeasonStatsDf['GF'] - filteredSeasonStatsDf['GA']
+filteredSeasonStatsDf['Team Id'] =  filteredSeasonStatsDf["Team"].map(getTeamId)
+filteredSeasonStatsDf = filteredSeasonStatsDf.sort_values(by=['Season', 'Pts', 'GD'], ascending=[True, False, False])
+filteredSeasonStatsDf['Position'] = filteredSeasonStatsDf.groupby('Season')['Pts'].rank(
+    ascending=False, 
+    method='first'
+).astype(int)
 filteredSeasonStatsDf.info()
-
 
 
 kaggleMatchesDf = pd.read_csv('matches.csv')
@@ -53,6 +72,9 @@ filteredKaggleMatchesDf = filteredKaggleMatchesDf.drop('Attendance', axis=1)
 filteredKaggleMatchesDf = filteredKaggleMatchesDf.dropna(axis=0)
 filteredKaggleMatchesDf['Home'] = filteredKaggleMatchesDf['Home'].replace(teamNameMapping)
 filteredKaggleMatchesDf['Away'] = filteredKaggleMatchesDf['Away'].replace(teamNameMapping)
+filteredKaggleMatchesDf['Home Id'] = filteredKaggleMatchesDf['Home'].map(getTeamId)
+filteredKaggleMatchesDf['Away Id'] = filteredKaggleMatchesDf['Away'].map(getTeamId)
+filteredKaggleMatchesDf['Result'] = filteredKaggleMatchesDf.apply(lambda row: getResult(row['Home Goals'], row['Away Goals']), axis=1)
 filteredKaggleMatchesDf.info()
 
 teamsDf.to_csv("cleaned_data/teams.csv", index=False)

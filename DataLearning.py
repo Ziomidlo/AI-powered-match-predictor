@@ -55,7 +55,7 @@ with open('dataPLStandings.json') as file:
 
 finishedMatches = dataFinished['matches']
 upcomingMatches = dataUpcoming['matches']
-teamsStandings = dataTeam['standings'][0]['table']
+teamStandings = dataTeam['standings'][0]['table']
 seasons = pd.read_csv(cleanedDataFolder + 'seasons.csv')
 pastMatches = pd.read_csv(cleanedDataFolder + 'past-matches.csv')
 pastSeasonsStats = pd.read_csv(cleanedDataFolder + 'season-stats.csv')
@@ -63,26 +63,28 @@ teams = pd.read_csv(cleanedDataFolder + 'teams.csv')
 
 #Data Structuring
 
-structuredCurrentSeasonData = []
-structuredLastSeasonData = []
-structuredTableData = {}
+structuredCurrentSeasonMatches = []
+structuredLastSeasonsMatches = []
+structuredTeamStandings = {}
+structuredPastSeasons = {}
+
 
 teamMapping = dict(zip(teams['Team'], teams['Id']))
 
-for team in teamsStandings:
+for team in teamStandings:
    teamName = team["team"]["name"]
    teamId = teamMapping.get(teamName, -1)
-   structuredTableData[teamName] = {
-      "team_id" : teamId,
-      "position": team["position"],
-      "played_games": team["playedGames"],
-      "won": team["won"],
-      "draw": team["draw"],
-      "lost": team["lost"],
-      "goals_for": team["goalsFor"],
-      "goals_against": team["goalsAgainst"],
-      "goal_difference": team["goalDifference"],
-      "points": team["points"]
+   structuredTeamStandings[teamName] = {
+      "Team Id" : teamId,
+      "Position": team["position"],
+      "GP": team["playedGames"],
+      "W": team["won"],
+      "D": team["draw"],
+      "L": team["lost"],
+      "GF": team["goalsFor"],
+      "GA": team["goalsAgainst"],
+      "GD": team["goalDifference"],
+      "Points": team["points"]
    }
 
 
@@ -94,9 +96,9 @@ for match in finishedMatches:
    awayTeam = match["awayTeam"]["name"]
    homeTeamId = teamMapping.get(homeTeam, -1)
    awayTeamId = teamMapping.get(awayTeam, -1)
-   currentHomePossition = structuredTableData[homeTeam]["position"]
-   CurrentAwayPossition = structuredTableData[awayTeam]["position"] 
-   match_date = datetime.strptime(match["utcDate"], '%Y-%m-%dT%H:%M:%SZ')
+   currentHomePossition = structuredTeamStandings[homeTeam]["Position"]
+   CurrentAwayPossition = structuredTeamStandings[awayTeam]["Position"] 
+   matchDate = datetime.strptime(match["utcDate"], '%Y-%m-%dT%H:%M:%SZ')
    goalDiff = None if homeScore is None or awayScore is None else (homeScore - awayScore)
    season = "2024/2025"
    
@@ -109,106 +111,111 @@ for match in finishedMatches:
    else:
       result = "Draw"
 
-   structuredCurrentSeasonData.append({
-      "season": season,
-      "competition": match["competition"]["name"],
-      "match_date": match_date,
-      "home_team_id" : homeTeamId,
-      "home_team": homeTeam,
-      "away_team_id" : awayTeamId,
-      "away_team": awayTeam,
-      "home_score": homeScore,
-      "away_score": awayScore,
-      "result": result,
-      "match_status": match["status"],
-      "goal_difference": goalDiff
+   structuredCurrentSeasonMatches.append({
+      "Season": season,
+      "Date": matchDate,
+      "Home Id" : homeTeamId,
+      "Home": homeTeam,
+      "Away Id" : awayTeamId,
+      "Away": awayTeam,
+      "Home Goals": homeScore,
+      "Away Goals": awayScore,
+      "Result": result,
+      "Match": match["status"],
+      "GD": goalDiff
    })
 
 #Creating Data Frames & Analysis
-kaggleDf = pd.read_csv("past-dataPL.csv")
-print(kaggleDf.head())
-kaggleDf.info()
-kaggleDf.isnull().sum()
-kaggleDf.nunique()
-kaggleDf.describe()
+
+teamStandingsDf = pd.DataFrame.from_dict(structuredTeamStandings, orient="index").reset_index()
+#print(df.head())
+teamStandingsDf.info()
+teamStandingsDf.isnull().sum()
+teamStandingsDf.nunique()
+teamStandingsDf.describe()
+
+currentMatchesDf = pd.DataFrame(structuredCurrentSeasonMatches)
+currentMatchesDf = currentMatchesDf.sort_values(by='Date', ascending=False)
+#print(df2.head())
+currentMatchesDf.info()
+currentMatchesDf.isnull().sum()
+currentMatchesDf.nunique()
+currentMatchesDf.describe()
 
 
-df = pd.DataFrame.from_dict(structuredTableData, orient="index").reset_index()
-df.rename(columns={"index": "team"}, inplace=True)
-print(df.head())
-df.info()
-df.isnull().sum()
-df.nunique()
-df.describe()
+print(pastMatches.head())
+pastMatches.info()
+pastMatches.isnull().sum()
+pastMatches.nunique()
+pastMatches.describe()
 
-df2 = pd.DataFrame(structuredCurrentSeasonData)
-df2 = df2.sort_values(by='match_date', ascending=False)
-print(df2.head())
-df2.info()
-df2.isnull().sum()
-df2.nunique()
-df2.describe()
+print(pastSeasonsStats.head())
+pastSeasonsStats.info()
+pastSeasonsStats.isnull().sum()
+pastSeasonsStats.nunique()
+pastSeasonsStats.describe()
 
 
 
 #Feauture Engineering
 def calculate_form(team, match_date):
-   pastMatches = df2[
-   ((df2['home_team'] == team) | (df2['away_team'] == team))
-   & (df2['match_date'] < match_date)
-   ].sort_values(by='match_date', ascending=False).head(5)
+   pastMatches = currentMatchesDf[
+   ((currentMatchesDf['Home'] == team) | (currentMatchesDf['Away'] == team))
+   & (currentMatchesDf['Date'] < match_date)
+   ].sort_values(by='Date', ascending=False).head(5)
 
    points = 0
-   total_points = 15
+   totalPoints = 15
    for _, row in pastMatches.iterrows():
-      if row['home_team'] == team:
-         if row['result'] == "Home win":
+      if row['Home'] == team:
+         if row['Result'] == 'Home win':
             points += 3
-         elif row['result'] == "Draw":
+         elif row['Result'] == 'Draw':
             points += 1
       elif row['away_team'] == team:
-         if row['result'] == "Away win":
+         if row['Result'] == 'Away win':
             points += 3
-         elif row['result'] == "Draw":
+         elif row['Result'] == 'Draw':
             points += 1
-   percentage_of_points = (points / total_points) * 100
-   return percentage_of_points.__round__(2)
+   percentageOfPoints = (points / totalPoints) * 100
+   return percentageOfPoints.__round__(2)
 
 def calculate_goal_difference(team, match_date):
-   past_matches = df2[
-   ((df2['home_team'] == team) | (df2['away_team'] == team))
-   & (df2['match_date'] < match_date)
-   ].sort_values(by='match_date', ascending=False).head(5)
+   pastMatches = currentMatchesDf[
+   ((currentMatchesDf['Home'] == team) | (currentMatchesDf['Away'] == team))
+   & (currentMatchesDf['Date'] < match_date)
+   ].sort_values(by='Date', ascending=False).head(5)
    goal_difference = 0
 
-   for _, row in past_matches.iterrows():
-      if row['home_team'] == team:
-         goal_difference += (row['home_score'] - row['away_score'])
+   for _, row in pastMatches.iterrows():
+      if row['Home'] == team:
+         goal_difference += (row['Home Goals'] - row['Away Goals'])
       elif row['away_team'] == team:
-         goal_difference += (row['away_score'] - row['home_score'])
+         goal_difference += (row['Away Goals'] - row['Home Goals'])
    return goal_difference
 
 
 
 #Data for model traning
-df2['result_numeric'] = df2['result'].map({"Home win" : 1, "Draw" : 0, "Away win" : -1})
-df2["home_team_form"] = df2.apply(lambda row: calculate_form(row["home_team"], row["match_date"]), axis=1)
-df2["away_team_form"] = df2.apply(lambda row: calculate_form(row["away_team"], row["match_date"]), axis=1)
-df2["home_team_goal_difference"] = df2.apply(lambda row: calculate_goal_difference(row["home_team"], row["match_date"]), axis=1)
-df2["away_team_goal_difference"] = df2.apply(lambda row: calculate_goal_difference(row["away_team"], row["match_date"]), axis=1)
-df2["home_team_strength"] = df2["home_team_form"] + df2["home_team_goal_difference"]
-df2["away_team_strength"] = df2["away_team_form"] + df2["away_team_goal_difference"]
-df2["goal_diff_delta"] = df2["home_team_goal_difference"] - df2["away_team_goal_difference"]
+currentMatchesDf['result_numeric'] = currentMatchesDf['Result'].map({"Home win" : 1, "Draw" : 0, "Away win" : -1})
+pastMatches['result_numeric'] = pastMatches['Result'].map({"Home win" : 1, "Draw" : 0, "Away win": -1})
+currentMatchesDf["home_team_form"] = currentMatchesDf.apply(lambda row: calculate_form(row["Home"], row["Date"]), axis=1)
+currentMatchesDf["away_team_form"] = currentMatchesDf.apply(lambda row: calculate_form(row["Away"], row["Date"]), axis=1)
+currentMatchesDf["home_team_goal_difference"] = currentMatchesDf.apply(lambda row: calculate_goal_difference(row["Home"], row["Date"]), axis=1)
+currentMatchesDf["away_team_goal_difference"] = currentMatchesDf.apply(lambda row: calculate_goal_difference(row["Away"], row["Date"]), axis=1)
+currentMatchesDf["home_team_strength"] = currentMatchesDf["home_team_form"] + currentMatchesDf["home_team_goal_difference"]
+currentMatchesDf["away_team_strength"] = currentMatchesDf["away_team_form"] + currentMatchesDf["away_team_goal_difference"]
+currentMatchesDf["goal_diff_delta"] = currentMatchesDf["home_team_goal_difference"] - currentMatchesDf["away_team_goal_difference"]
 
 #Correlation Analysis
-corr, p_value = spearmanr(df2["home_team_strength"], df2["result_numeric"])
+corr, p_value = spearmanr(currentMatchesDf["home_team_strength"], currentMatchesDf["result_numeric"])
 print(f"Spearsman's correlation: {corr:.3f}, p_value: {p_value:.3f}")
-pearson_corr, p_value = pearsonr(df2["home_team_strength"], df2["result_numeric"])
+pearson_corr, p_value = pearsonr(currentMatchesDf["home_team_strength"], currentMatchesDf["result_numeric"])
 print(f"Pearson's correlation: {pearson_corr:.3f}, p_value: {p_value:.3f}")
 
 #Model Training
-X = df2[["goal_diff_delta", "home_team_strength"]]
-y = df2["result_numeric"]
+X = currentMatchesDf[["goal_diff_delta", "home_team_strength"]]
+y = currentMatchesDf["result_numeric"]
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
