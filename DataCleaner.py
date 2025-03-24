@@ -33,7 +33,6 @@ selectedSeasons = ["2020/2021", "2021/2022", "2022/2023", "2023/2024"]
 teamsDf = pd.read_csv("teams.csv")
 teamsDf['Team'] = teamsDf['Team'].replace(teamNameMapping)
 teamsDf.info()
-
 teamMapping = dict(zip(teamsDf['Team'], teamsDf['Id']))
 
 def getTeamId(teamName):
