@@ -172,7 +172,7 @@ def calculate_form(team, match_date):
             points += 3
          elif row['Result'] == 'Draw':
             points += 1
-      elif row['away_team'] == team:
+      elif row['Away'] == team:
          if row['Result'] == 'Away win':
             points += 3
          elif row['Result'] == 'Draw':
@@ -190,7 +190,7 @@ def calculate_goal_difference(team, match_date):
    for _, row in pastMatches.iterrows():
       if row['Home'] == team:
          goal_difference += (row['Home Goals'] - row['Away Goals'])
-      elif row['away_team'] == team:
+      elif row['Away'] == team:
          goal_difference += (row['Away Goals'] - row['Home Goals'])
    return goal_difference
 
@@ -198,7 +198,6 @@ def calculate_goal_difference(team, match_date):
 
 #Data for model traning
 currentMatchesDf['result_numeric'] = currentMatchesDf['Result'].map({"Home win" : 1, "Draw" : 0, "Away win" : -1})
-pastMatches['result_numeric'] = pastMatches['Result'].map({"Home win" : 1, "Draw" : 0, "Away win": -1})
 currentMatchesDf["home_team_form"] = currentMatchesDf.apply(lambda row: calculate_form(row["Home"], row["Date"]), axis=1)
 currentMatchesDf["away_team_form"] = currentMatchesDf.apply(lambda row: calculate_form(row["Away"], row["Date"]), axis=1)
 currentMatchesDf["home_team_goal_difference"] = currentMatchesDf.apply(lambda row: calculate_goal_difference(row["Home"], row["Date"]), axis=1)
@@ -206,22 +205,21 @@ currentMatchesDf["away_team_goal_difference"] = currentMatchesDf.apply(lambda ro
 currentMatchesDf["home_team_strength"] = currentMatchesDf["home_team_form"] + currentMatchesDf["home_team_goal_difference"]
 currentMatchesDf["away_team_strength"] = currentMatchesDf["away_team_form"] + currentMatchesDf["away_team_goal_difference"]
 currentMatchesDf["goal_diff_delta"] = currentMatchesDf["home_team_goal_difference"] - currentMatchesDf["away_team_goal_difference"]
+pastMatches["home_xG_avg"] = pastMatches.groupby('Home')['xG'].transform('mean')
+pastMatches["away_xG_avg"] = pastMatches.groupby('Away')['xG.1'].transform('mean')
+
 
 #Correlation Analysis
-corr, p_value = spearmanr(currentMatchesDf["home_team_strength"], currentMatchesDf["result_numeric"])
+corr, p_value = spearmanr(pastMatches["home_xG_avg"], pastMatches["result_numeric"])
 print(f"Spearsman's correlation: {corr:.3f}, p_value: {p_value:.3f}")
-pearson_corr, p_value = pearsonr(currentMatchesDf["home_team_strength"], currentMatchesDf["result_numeric"])
+pearson_corr, p_value = pearsonr(pastMatches["home_xG_avg"], pastMatches["result_numeric"])
 print(f"Pearson's correlation: {pearson_corr:.3f}, p_value: {p_value:.3f}")
 
 #Model Training
-X = currentMatchesDf[["goal_diff_delta", "home_team_strength"]]
-y = currentMatchesDf["result_numeric"]
+X = pastMatches[["home_xG_avg", "away_xG_avg"]]
+y = pastMatches["result_numeric"]
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-
-scaler = StandardScaler()
-X_train = scaler.fit_transform(X_train)
-X_test = scaler.transform(X_test)
 
 model =  LogisticRegression(class_weight="balanced")
 model.fit(X_train, y_train)

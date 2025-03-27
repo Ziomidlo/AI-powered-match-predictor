@@ -40,11 +40,11 @@ def getTeamId(teamName):
 
 def getResult(homeGoals, awayGoals):
     if homeGoals > awayGoals:
-      result = "Home Win"
+      result = "Home win"
     elif homeGoals < awayGoals:
-       result = "Away Win"
-    else:
        result = "Draw"
+    else:
+       result = "Away win"
     return result
 
 
@@ -74,6 +74,7 @@ filteredKaggleMatchesDf['Away'] = filteredKaggleMatchesDf['Away'].replace(teamNa
 filteredKaggleMatchesDf['Home Id'] = filteredKaggleMatchesDf['Home'].map(getTeamId)
 filteredKaggleMatchesDf['Away Id'] = filteredKaggleMatchesDf['Away'].map(getTeamId)
 filteredKaggleMatchesDf['Result'] = filteredKaggleMatchesDf.apply(lambda row: getResult(row['Home Goals'], row['Away Goals']), axis=1)
+filteredKaggleMatchesDf['result_numeric'] = filteredKaggleMatchesDf['Result'].map({'Home win': 1, 'Draw' : 0, 'Away win' : -1})
 filteredKaggleMatchesDf.info()
 
 teamsDf.to_csv("cleaned_data/teams.csv", index=False)
