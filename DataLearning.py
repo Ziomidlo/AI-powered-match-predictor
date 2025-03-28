@@ -3,6 +3,7 @@ import pandas as pd
 import json
 import csv 
 import seaborn as seaborn
+import os
 import matplotlib.pyplot as plt
 from datetime import datetime
 from scipy.stats import spearmanr, pearsonr
@@ -11,7 +12,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from dotenv import load_dotenv
 
+load_dotenv()
+API_KEY = os.getenv("API_KEY")
 
 uri = "https://api.football-data.org/v4/competitions/PL/"
 matches = "/matches"
@@ -21,12 +25,10 @@ standings = "standings"
 cleanedDataFolder = "cleaned_data/"
 
 #Get Data From API
-headers = {'X-Auth-Token': ''}
+headers = {'X-Auth-Token': API_KEY}
 response = requests.get(uri + finishedMatches , headers=headers)
 dataFinished = response.json()
 
-with open('dataPLMatches2024Finished.json', 'w') as file:
-   json.dump(dataFinished, file)
 
 with open('dataPLMatches2024Finished.json') as file:
    dataFinished = json.load(file)
@@ -35,17 +37,12 @@ with open('dataPLMatches2024Finished.json') as file:
 responseUpcoming = requests.get(uri + upcomingMaches, headers=headers)
 dataUpcoming = responseUpcoming.json()
 
-with open('dataPLMatches2024Upcoming.json', 'w') as file:
-   json.dump(dataUpcoming, file)
 
 with open('dataPLMatches2024Upcoming.json') as file:
    dataUpcoming = json.load(file)
   
 responseTeam = requests.get(uri + standings, headers=headers)
 dataTeam = responseTeam.json()
-
-with open('dataPLStandings.json', 'w') as file:
-   json.dump(dataTeam, file)
 
 with open('dataPLStandings.json') as file:
    dataTeam = json.load(file)
@@ -97,7 +94,7 @@ for match in finishedMatches:
    homeTeamId = teamMapping.get(homeTeam, -1)
    awayTeamId = teamMapping.get(awayTeam, -1)
    currentHomePossition = structuredTeamStandings[homeTeam]["Position"]
-   CurrentAwayPossition = structuredTeamStandings[awayTeam]["Position"] 
+   currentAwayPossition = structuredTeamStandings[awayTeam]["Position"]
    matchDate = datetime.strptime(match["utcDate"], '%Y-%m-%dT%H:%M:%SZ')
    goalDiff = None if homeScore is None or awayScore is None else (homeScore - awayScore)
    season = "2024/2025"
@@ -141,6 +138,8 @@ currentMatchesDf.info()
 currentMatchesDf.isnull().sum()
 currentMatchesDf.nunique()
 currentMatchesDf.describe()
+currentMatchesDf['xG'] = currentMatchesDf.groupby('Home')['Home Goals'].transform(lambda x: x.rolling(5, min_periods=1).mean())
+currentMatchesDf['xG.1'] = currentMatchesDf.groupby('Away')['Away Goals'].transform(lambda x: x.rolling(5, min_periods=1).mean())
 
 
 print(pastMatches.head())
@@ -155,13 +154,23 @@ pastSeasonsStats.isnull().sum()
 pastSeasonsStats.nunique()
 pastSeasonsStats.describe()
 
+mergedMatches = pd.concat([currentMatchesDf, pastMatches], ignore_index=True)
+mergedMatches['Venue'] = mergedMatches['Venue'].fillna('Unknown')
+mergedMatches['Match'] = mergedMatches['Match'].fillna('FINISHED')
+mergedMatches['Date'] = pd.to_datetime(mergedMatches['Date']).dt.date
+print(mergedMatches.head())
+mergedMatches.info()
+mergedMatches.isnull().sum()
+mergedMatches.nunique()
+mergedMatches.describe()
+
 
 
 #Feauture Engineering
 def calculate_form(team, match_date):
-   pastMatches = currentMatchesDf[
-   ((currentMatchesDf['Home'] == team) | (currentMatchesDf['Away'] == team))
-   & (currentMatchesDf['Date'] < match_date)
+   pastMatches = mergedMatches[
+   ((mergedMatches['Home'] == team) | (mergedMatches['Away'] == team))
+   & (mergedMatches['Date'] < match_date)
    ].sort_values(by='Date', ascending=False).head(5)
 
    points = 0
@@ -181,9 +190,9 @@ def calculate_form(team, match_date):
    return percentageOfPoints.__round__(2)
 
 def calculate_goal_difference(team, match_date):
-   pastMatches = currentMatchesDf[
-   ((currentMatchesDf['Home'] == team) | (currentMatchesDf['Away'] == team))
-   & (currentMatchesDf['Date'] < match_date)
+   pastMatches = mergedMatches[
+   ((mergedMatches['Home'] == team) | (mergedMatches['Away'] == team))
+   & (mergedMatches['Date'] < match_date)
    ].sort_values(by='Date', ascending=False).head(5)
    goal_difference = 0
 
@@ -197,6 +206,7 @@ def calculate_goal_difference(team, match_date):
 
 
 #Data for model traning
+'''
 currentMatchesDf['result_numeric'] = currentMatchesDf['Result'].map({"Home win" : 1, "Draw" : 0, "Away win" : -1})
 currentMatchesDf["home_team_form"] = currentMatchesDf.apply(lambda row: calculate_form(row["Home"], row["Date"]), axis=1)
 currentMatchesDf["away_team_form"] = currentMatchesDf.apply(lambda row: calculate_form(row["Away"], row["Date"]), axis=1)
@@ -207,21 +217,36 @@ currentMatchesDf["away_team_strength"] = currentMatchesDf["away_team_form"] + cu
 currentMatchesDf["goal_diff_delta"] = currentMatchesDf["home_team_goal_difference"] - currentMatchesDf["away_team_goal_difference"]
 pastMatches["home_xG_avg"] = pastMatches.groupby('Home')['xG'].transform('mean')
 pastMatches["away_xG_avg"] = pastMatches.groupby('Away')['xG.1'].transform('mean')
+'''
+
+mergedMatches['result_numeric'] = mergedMatches['Result'].map({"Home win" : 1, "Draw" : 0, "Away win" : -1})
+#mergedMatches.to_csv(cleanedDataFolder + 'mergedMatches.csv')
+mergedMatches["home_team_form"] = mergedMatches.apply(lambda row: calculate_form(row["Home"], row["Date"]), axis=1)
+mergedMatches["away_team_form"] = mergedMatches.apply(lambda row: calculate_form(row["Away"], row["Date"]), axis=1)
+mergedMatches["home_team_goal_difference"] = mergedMatches.apply(lambda row: calculate_goal_difference(row["Home"], row["Date"]), axis=1)
+mergedMatches["away_team_goal_difference"] = mergedMatches.apply(lambda row: calculate_goal_difference(row["Away"], row["Date"]), axis=1)
+mergedMatches["home_team_strength"] = mergedMatches["home_team_form"] + mergedMatches["home_team_goal_difference"]
+mergedMatches["away_team_strength"] = mergedMatches["away_team_form"] + mergedMatches["away_team_goal_difference"]
+mergedMatches["goal_diff_delta"] = mergedMatches["home_team_goal_difference"] - mergedMatches["away_team_goal_difference"]
+mergedMatches["home_xG_avg"] = mergedMatches.groupby('Home')['xG'].transform('mean')
+mergedMatches["away_xG_avg"] = mergedMatches.groupby('Away')['xG.1'].transform('mean')
+
+#mergedMatches.to_csv(cleanedDataFolder + 'FullMergedMatchesInfo.csv')
 
 
 #Correlation Analysis
-corr, p_value = spearmanr(pastMatches["home_xG_avg"], pastMatches["result_numeric"])
+corr, p_value = spearmanr(mergedMatches["home_xG_avg"], mergedMatches["result_numeric"])
 print(f"Spearsman's correlation: {corr:.3f}, p_value: {p_value:.3f}")
-pearson_corr, p_value = pearsonr(pastMatches["home_xG_avg"], pastMatches["result_numeric"])
+pearson_corr, p_value = pearsonr(mergedMatches["home_xG_avg"], mergedMatches["result_numeric"])
 print(f"Pearson's correlation: {pearson_corr:.3f}, p_value: {p_value:.3f}")
 
 #Model Training
-X = pastMatches[["home_xG_avg", "away_xG_avg"]]
-y = pastMatches["result_numeric"]
+X = mergedMatches[["home_xG_avg", "away_xG_avg", "home_team_strength", "away_team_strength", 'goal_diff_delta']]
+y = mergedMatches["result_numeric"]
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
-model =  LogisticRegression(class_weight="balanced")
+model =  LogisticRegression(class_weight='balanced',solver='saga', max_iter=100)
 model.fit(X_train, y_train)
 
 
