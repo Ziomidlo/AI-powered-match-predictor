@@ -9,9 +9,8 @@ from datetime import datetime
 from scipy.stats import spearmanr, pearsonr
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression, LinearRegression
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_absolute_error, mean_squared_error
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -157,6 +156,7 @@ pastSeasonsStats.describe()
 mergedMatches = pd.concat([currentMatchesDf, pastMatches], ignore_index=True)
 mergedMatches['Venue'] = mergedMatches['Venue'].fillna('Unknown')
 mergedMatches['Match'] = mergedMatches['Match'].fillna('FINISHED')
+mergedMatches['GD'] = mergedMatches['GD'].fillna(mergedMatches['Home Goals'] - mergedMatches['Away Goals'])
 mergedMatches['Date'] = pd.to_datetime(mergedMatches['Date']).dt.date
 print(mergedMatches.head())
 mergedMatches.info()
@@ -165,12 +165,11 @@ mergedMatches.nunique()
 mergedMatches.describe()
 
 
-
 #Feauture Engineering
-def calculate_form(team, match_date):
-   pastMatches = mergedMatches[
-   ((mergedMatches['Home'] == team) | (mergedMatches['Away'] == team))
-   & (mergedMatches['Date'] < match_date)
+def calculateForm(team, matchDate, df):
+   pastMatches = df[
+   ((df['Home'] == team) | (df['Away'] == team))
+   & (df['Date'] < matchDate)
    ].sort_values(by='Date', ascending=False).head(5)
 
    points = 0
@@ -189,29 +188,42 @@ def calculate_form(team, match_date):
    percentageOfPoints = (points / totalPoints) * 100
    return percentageOfPoints.__round__(2)
 
-def calculate_goal_difference(team, match_date):
-   pastMatches = mergedMatches[
-   ((mergedMatches['Home'] == team) | (mergedMatches['Away'] == team))
-   & (mergedMatches['Date'] < match_date)
-   ].sort_values(by='Date', ascending=False).head(5)
-   goal_difference = 0
+def calculateGoalDifference(team, matchDate, df):
+    pastMatches = df[
+        ((df['Home'] == team) | (df['Away'] == team)) & 
+        (df['Date'] < matchDate)
+    ].sort_values(by='Date', ascending=False).head(5)
 
-   for _, row in pastMatches.iterrows():
-      if row['Home'] == team:
-         goal_difference += (row['Home Goals'] - row['Away Goals'])
-      elif row['Away'] == team:
-         goal_difference += (row['Away Goals'] - row['Home Goals'])
-   return goal_difference
+    homeMatches = pastMatches[pastMatches['Home'] == team]
+    awayMatches = pastMatches[pastMatches['Away'] == team]
+
+    goalDifference = (homeMatches['Home Goals'] - homeMatches['Away Goals']).sum() + \
+                      (awayMatches['Away Goals'] - awayMatches['Home Goals']).sum()
+    return goalDifference
+
+def headToHeadResults(homeTeam, awayTeam, df):
+   h2hMatches = df[((df['Home'] == homeTeam) & (df['Away'] == awayTeam)) |
+               ((df['Home'] == awayTeam) & (df['Away'] == homeTeam))]
+   
+   homeWins = ((h2hMatches["Home"] == homeTeam) & (h2hMatches["Result"] == "Home Win")).sum()
+   awayWins = ((h2hMatches["Away"] == awayTeam) & (h2hMatches["Result"] == "Away Win")).sum()
+   draws = (h2hMatches['Result'] == "Draw").sum()
+
+   homeGoals = h2hMatches.loc[h2hMatches["Home"] == homeTeam, "Home Goals"].sum() + \
+               h2hMatches.loc[h2hMatches["Away"] == homeTeam, "Away Goals"].sum()
+   awayGoals = h2hMatches.loc[h2hMatches["Home"] == awayTeam, "Home Goals"].sum() + \
+               h2hMatches.loc[h2hMatches["Away"] == awayTeam, "Away Goals"].sum()
 
 
+   return homeWins, awayWins, draws, homeGoals, awayGoals
 
 #Data for model traning
 '''
 currentMatchesDf['result_numeric'] = currentMatchesDf['Result'].map({"Home win" : 1, "Draw" : 0, "Away win" : -1})
-currentMatchesDf["home_team_form"] = currentMatchesDf.apply(lambda row: calculate_form(row["Home"], row["Date"]), axis=1)
-currentMatchesDf["away_team_form"] = currentMatchesDf.apply(lambda row: calculate_form(row["Away"], row["Date"]), axis=1)
-currentMatchesDf["home_team_goal_difference"] = currentMatchesDf.apply(lambda row: calculate_goal_difference(row["Home"], row["Date"]), axis=1)
-currentMatchesDf["away_team_goal_difference"] = currentMatchesDf.apply(lambda row: calculate_goal_difference(row["Away"], row["Date"]), axis=1)
+currentMatchesDf["home_team_form"] = currentMatchesDf.apply(lambda row: calculate_form(row["Home"], row["Date"], currentMatchesDf), axis=1)
+currentMatchesDf["away_team_form"] = currentMatchesDf.apply(lambda row: calculate_form(row["Away"], row["Date"], currentMatchesDf), axis=1)
+currentMatchesDf["home_team_goal_difference"] = currentMatchesDf.apply(lambda row: calculate_goal_difference(row["Home"], row["Date"], currentMatchesDf), axis=1)
+currentMatchesDf["away_team_goal_difference"] = currentMatchesDf.apply(lambda row: calculate_goal_difference(row["Away"], row["Date"], currentMatchesDf), axis=1)
 currentMatchesDf["home_team_strength"] = currentMatchesDf["home_team_form"] + currentMatchesDf["home_team_goal_difference"]
 currentMatchesDf["away_team_strength"] = currentMatchesDf["away_team_form"] + currentMatchesDf["away_team_goal_difference"]
 currentMatchesDf["goal_diff_delta"] = currentMatchesDf["home_team_goal_difference"] - currentMatchesDf["away_team_goal_difference"]
@@ -221,18 +233,19 @@ pastMatches["away_xG_avg"] = pastMatches.groupby('Away')['xG.1'].transform('mean
 
 mergedMatches['result_numeric'] = mergedMatches['Result'].map({"Home win" : 1, "Draw" : 0, "Away win" : -1})
 #mergedMatches.to_csv(cleanedDataFolder + 'mergedMatches.csv')
-mergedMatches["home_team_form"] = mergedMatches.apply(lambda row: calculate_form(row["Home"], row["Date"]), axis=1)
-mergedMatches["away_team_form"] = mergedMatches.apply(lambda row: calculate_form(row["Away"], row["Date"]), axis=1)
-mergedMatches["home_team_goal_difference"] = mergedMatches.apply(lambda row: calculate_goal_difference(row["Home"], row["Date"]), axis=1)
-mergedMatches["away_team_goal_difference"] = mergedMatches.apply(lambda row: calculate_goal_difference(row["Away"], row["Date"]), axis=1)
+mergedMatches["home_team_form"] = mergedMatches.apply(lambda row: calculateForm(row["Home"], row["Date"], mergedMatches), axis=1)
+mergedMatches["away_team_form"] = mergedMatches.apply(lambda row: calculateForm(row["Away"], row["Date"], mergedMatches), axis=1)
+mergedMatches["home_team_goal_difference"] = mergedMatches.apply(lambda row: calculateGoalDifference(row["Home"], row["Date"], mergedMatches), axis=1)
+mergedMatches["away_team_goal_difference"] = mergedMatches.apply(lambda row: calculateGoalDifference(row["Away"], row["Date"], mergedMatches), axis=1)
 mergedMatches["home_team_strength"] = mergedMatches["home_team_form"] + mergedMatches["home_team_goal_difference"]
 mergedMatches["away_team_strength"] = mergedMatches["away_team_form"] + mergedMatches["away_team_goal_difference"]
 mergedMatches["goal_diff_delta"] = mergedMatches["home_team_goal_difference"] - mergedMatches["away_team_goal_difference"]
 mergedMatches["home_xG_avg"] = mergedMatches.groupby('Home')['xG'].transform('mean')
 mergedMatches["away_xG_avg"] = mergedMatches.groupby('Away')['xG.1'].transform('mean')
+mergedMatches[['h2h_home_wins', 'h2h_away_wins', 'h2h_draws', 'h2h_home_goals', 'h2h_away_goals']] = \
+    mergedMatches.apply(lambda row: pd.Series(headToHeadResults(row['Home'], row['Away'], mergedMatches)), axis=1)
 
-#mergedMatches.to_csv(cleanedDataFolder + 'FullMergedMatchesInfo.csv')
-
+mergedMatches.to_csv(cleanedDataFolder + 'FullMergedMatchesInfo.csv')
 
 #Correlation Analysis
 corr, p_value = spearmanr(mergedMatches["home_xG_avg"], mergedMatches["result_numeric"])
@@ -240,8 +253,10 @@ print(f"Spearsman's correlation: {corr:.3f}, p_value: {p_value:.3f}")
 pearson_corr, p_value = pearsonr(mergedMatches["home_xG_avg"], mergedMatches["result_numeric"])
 print(f"Pearson's correlation: {pearson_corr:.3f}, p_value: {p_value:.3f}")
 
-#Model Training
-X = mergedMatches[["home_xG_avg", "away_xG_avg", "home_team_strength", "away_team_strength", 'goal_diff_delta']]
+#Model Training Logistic and Linear Regression
+#Logistic Regression
+
+X = mergedMatches[["home_xG_avg", "away_xG_avg", "home_team_strength", "away_team_strength", 'goal_diff_delta', 'h2h_home_wins', 'h2h_away_wins', 'h2h_draws', 'h2h_home_goals', 'h2h_away_goals']]
 y = mergedMatches["result_numeric"]
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
@@ -254,6 +269,33 @@ y_pred = model.predict(X_test)
 print("Accuracy: ", accuracy_score(y_test, y_pred))
 print("Classification Report: ", classification_report(y_test, y_pred))
 print("Confusion Matrix: ", confusion_matrix(y_test, y_pred))
+
+#Linear Regression
+
+#Target for linear reggresion
+y_home_goals = mergedMatches["Home Goals"]
+y_away_goals = mergedMatches["Away Goals"]
+
+X_train, X_test, y_train_home, y_test_home = train_test_split(X, y_home_goals, test_size=0.2, random_state=42)
+X_train, X_test, y_train_away, y_test_away = train_test_split(X, y_away_goals, test_size=0.2, random_state=42)
+
+
+home_goals_model = LinearRegression()
+away_goals_model = LinearRegression()
+home_goals_model.fit(X_train, y_train_home)
+away_goals_model.fit(X_train, y_train_away)
+
+y_pred_home = home_goals_model.predict(X_test)
+y_pred_away = away_goals_model.predict(X_test)
+
+print("Home Goals Prediction:")
+print("MAE:", mean_absolute_error(y_test_home, y_pred_home))
+print("MSE:", mean_squared_error(y_test_home, y_pred_home))
+
+print("\nAway Goals Prediction:")
+print("MAE:", mean_absolute_error(y_test_away, y_pred_away))
+print("MSE:", mean_squared_error(y_test_away, y_pred_away))
+
 
 
 #Visualization
