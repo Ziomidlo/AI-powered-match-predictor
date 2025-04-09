@@ -26,6 +26,10 @@ teamNameMapping = {
     "Wolves": "Wolverhampton Wanderers FC"
 }
 
+venueNameMapping = {
+   
+}
+
 os.makedirs("cleaned_data", exist_ok=True)
 
 selectedSeasons = ["2020/2021", "2021/2022", "2022/2023", "2023/2024"]

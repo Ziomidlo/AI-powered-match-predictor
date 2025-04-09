@@ -22,6 +22,7 @@ finishedMatches =  matches + "?status=FINISHED"
 upcomingMaches = matches + "?status=TIMED"
 standings = "standings"
 cleanedDataFolder = "cleaned_data/"
+visualizationFolder = "visualizations/"
 
 #Get Data From API
 headers = {'X-Auth-Token': API_KEY}
@@ -29,21 +30,27 @@ response = requests.get(uri + finishedMatches , headers=headers)
 dataFinished = response.json()
 
 
-with open('dataPLMatches2024Finished.json') as file:
-   dataFinished = json.load(file)
+with open('dataPLMatches2024Finished.json', 'w') as file:
+   json.dump(dataFinished, file)
 
+with open('dataPLMatches2024Finished.json', 'r') as file:
+   dataFinished = json.load(file)
 
 responseUpcoming = requests.get(uri + upcomingMaches, headers=headers)
 dataUpcoming = responseUpcoming.json()
 
+with open('dataPLMatches2024Upcoming.json', 'w') as file:
+   json.dump(dataUpcoming, file)
 
-with open('dataPLMatches2024Upcoming.json') as file:
+with open('dataPLMatches2024Upcoming.json', 'r') as file:
    dataUpcoming = json.load(file)
   
 responseTeam = requests.get(uri + standings, headers=headers)
 dataTeam = responseTeam.json()
 
-with open('dataPLStandings.json') as file:
+with open('dataPLStandings.json', 'w') as file:
+   json.dump(dataTeam, file)
+with open('dataPLStandings.json', 'r') as file:
    dataTeam = json.load(file)
 
 
@@ -154,16 +161,19 @@ pastSeasonsStats.nunique()
 pastSeasonsStats.describe()
 
 mergedMatches = pd.concat([currentMatchesDf, pastMatches], ignore_index=True)
-mergedMatches['Venue'] = mergedMatches['Venue'].fillna('Unknown')
+venueMapping = pastMatches[['Home', 'Venue']].drop_duplicates()
+team_venue_dict = venueMapping.set_index('Home')['Venue'].to_dict()
+mergedMatches['Venue'] = mergedMatches['Venue'].fillna(mergedMatches['Home'].map(team_venue_dict))
+missingVenues = {"Ipswich Town FC" : "Portman Road"}
+mergedMatches['Venue'] = mergedMatches["Venue"].fillna(mergedMatches['Home'].map(missingVenues))
 mergedMatches['Match'] = mergedMatches['Match'].fillna('FINISHED')
 mergedMatches['GD'] = mergedMatches['GD'].fillna(mergedMatches['Home Goals'] - mergedMatches['Away Goals'])
+
 mergedMatches['Date'] = pd.to_datetime(mergedMatches['Date']).dt.date
-print(mergedMatches.head())
 mergedMatches.info()
 mergedMatches.isnull().sum()
 mergedMatches.nunique()
 mergedMatches.describe()
-
 
 #Feauture Engineering
 def calculateForm(team, matchDate, df):
@@ -205,17 +215,60 @@ def headToHeadResults(homeTeam, awayTeam, df):
    h2hMatches = df[((df['Home'] == homeTeam) & (df['Away'] == awayTeam)) |
                ((df['Home'] == awayTeam) & (df['Away'] == homeTeam))]
    
-   homeWins = ((h2hMatches["Home"] == homeTeam) & (h2hMatches["Result"] == "Home Win")).sum()
-   awayWins = ((h2hMatches["Away"] == awayTeam) & (h2hMatches["Result"] == "Away Win")).sum()
-   draws = (h2hMatches['Result'] == "Draw").sum()
+   homeWins = ((h2hMatches["Home"] == homeTeam) & (h2hMatches["result_numeric"] == 1)).sum() + \
+            ((h2hMatches["Away"] == homeTeam) & (h2hMatches["result_numeric"] == -1)).sum()
+   awayWins = ((h2hMatches["Away"] == awayTeam) & (h2hMatches["result_numeric"] == -1)).sum() + \
+            ((h2hMatches["Home"] == awayTeam) & (h2hMatches["result_numeric"] == 1)).sum()
+
+   draws = (h2hMatches['result_numeric'] == 0).sum()
 
    homeGoals = h2hMatches.loc[h2hMatches["Home"] == homeTeam, "Home Goals"].sum() + \
                h2hMatches.loc[h2hMatches["Away"] == homeTeam, "Away Goals"].sum()
    awayGoals = h2hMatches.loc[h2hMatches["Home"] == awayTeam, "Home Goals"].sum() + \
                h2hMatches.loc[h2hMatches["Away"] == awayTeam, "Away Goals"].sum()
 
-
    return homeWins, awayWins, draws, homeGoals, awayGoals
+
+def venueImpact(row, df):
+   homeTeam = row['Home']
+   venue = row['Venue']
+   season = row['Season']
+
+   homeVenueMatches = df[
+      (((df['Home'] == homeTeam)) &
+      (df['Venue'] == venue) &
+      (df['Season'] == season))
+   ]
+
+   otherVenueMatches = df[
+      (((df['Home'] == homeTeam)) &
+      (df['Venue'] != venue) &
+      (df['Season'] == season)) 
+   ]
+
+   homeWins = (homeVenueMatches['result_numeric'] == 1).sum()
+   awayWins = (homeVenueMatches['result_numeric'] == -1).sum()
+   draws = (homeVenueMatches['result_numeric'] == 0).sum()
+
+   homeWinsVenues = (otherVenueMatches['result_numeric'] == 1).sum()
+
+   totalHome = len(homeVenueMatches)
+   totalHomeVenues = len(otherVenueMatches)
+
+   homeWinPercentage = (homeWins / totalHome * 100) if totalHome > 0 else 0
+   awayWinPercentage = (awayWins / totalHome * 100) if totalHome > 0 else 0
+   drawsPercentage = (draws/totalHome * 100) if totalHome > 0 else 0
+
+   homeWinVenuesPercentage = (homeWinsVenues / totalHomeVenues * 100) if totalHomeVenues > 0 else 0
+
+   venueImpactDiff = homeWinPercentage - homeWinVenuesPercentage
+
+   homeGoalsMean = homeVenueMatches['Home Goals'].mean().__round__(2)
+   awayGoalsMean = homeVenueMatches['Away Goals'].mean().__round__(2)
+
+   return pd.Series([homeWinPercentage.__round__(2), awayWinPercentage.__round__(2), drawsPercentage.__round__(2), homeGoalsMean, awayGoalsMean, venueImpactDiff.__round__(2)])
+
+
 
 #Data for model traning
 '''
@@ -232,31 +285,33 @@ pastMatches["away_xG_avg"] = pastMatches.groupby('Away')['xG.1'].transform('mean
 '''
 
 mergedMatches['result_numeric'] = mergedMatches['Result'].map({"Home win" : 1, "Draw" : 0, "Away win" : -1})
-#mergedMatches.to_csv(cleanedDataFolder + 'mergedMatches.csv')
-mergedMatches["home_team_form"] = mergedMatches.apply(lambda row: calculateForm(row["Home"], row["Date"], mergedMatches), axis=1)
-mergedMatches["away_team_form"] = mergedMatches.apply(lambda row: calculateForm(row["Away"], row["Date"], mergedMatches), axis=1)
-mergedMatches["home_team_goal_difference"] = mergedMatches.apply(lambda row: calculateGoalDifference(row["Home"], row["Date"], mergedMatches), axis=1)
-mergedMatches["away_team_goal_difference"] = mergedMatches.apply(lambda row: calculateGoalDifference(row["Away"], row["Date"], mergedMatches), axis=1)
-mergedMatches["home_team_strength"] = mergedMatches["home_team_form"] + mergedMatches["home_team_goal_difference"]
-mergedMatches["away_team_strength"] = mergedMatches["away_team_form"] + mergedMatches["away_team_goal_difference"]
-mergedMatches["goal_diff_delta"] = mergedMatches["home_team_goal_difference"] - mergedMatches["away_team_goal_difference"]
-mergedMatches["home_xG_avg"] = mergedMatches.groupby('Home')['xG'].transform('mean')
-mergedMatches["away_xG_avg"] = mergedMatches.groupby('Away')['xG.1'].transform('mean')
+mergedMatches.to_csv(cleanedDataFolder + 'mergedMatches.csv')
+mergedMatches["home_team_form"] = mergedMatches.apply(lambda row: calculateForm(row["Home"], row["Date"], mergedMatches), axis=1).__round__(2)
+mergedMatches["away_team_form"] = mergedMatches.apply(lambda row: calculateForm(row["Away"], row["Date"], mergedMatches), axis=1).__round__(2)
+mergedMatches["home_team_goal_difference"] = mergedMatches.apply(lambda row: calculateGoalDifference(row["Home"], row["Date"], mergedMatches), axis=1).__round__(2)
+mergedMatches["away_team_goal_difference"] = mergedMatches.apply(lambda row: calculateGoalDifference(row["Away"], row["Date"], mergedMatches), axis=1).__round__(2)
+mergedMatches["home_team_strength"] = mergedMatches["home_team_form"] + mergedMatches["home_team_goal_difference"].__round__(2)
+mergedMatches["away_team_strength"] = mergedMatches["away_team_form"] + mergedMatches["away_team_goal_difference"].__round__(2)
+mergedMatches["goal_diff_delta"] = mergedMatches["home_team_goal_difference"] - mergedMatches["away_team_goal_difference"].__round__(2)
+mergedMatches["home_xG_avg"] = mergedMatches.groupby('Home')['xG'].transform('mean').__round__(2)
+mergedMatches["away_xG_avg"] = mergedMatches.groupby('Away')['xG.1'].transform('mean').__round__(2)
 mergedMatches[['h2h_home_wins', 'h2h_away_wins', 'h2h_draws', 'h2h_home_goals', 'h2h_away_goals']] = \
-    mergedMatches.apply(lambda row: pd.Series(headToHeadResults(row['Home'], row['Away'], mergedMatches)), axis=1)
+   mergedMatches.apply(lambda row: pd.Series(headToHeadResults(row['Home'], row['Away'], mergedMatches)), axis=1)
+mergedMatches[['venue_home_wins', 'venue_away_wins', 'venue_draws', 'venue_home_goals', 'venue_away_goals', 'venue_impact_diff']] = \
+   mergedMatches.apply(lambda row: pd.Series(venueImpact(row, mergedMatches)), axis=1)
 
 mergedMatches.to_csv(cleanedDataFolder + 'FullMergedMatchesInfo.csv')
 
 #Correlation Analysis
-corr, p_value = spearmanr(mergedMatches["home_xG_avg"], mergedMatches["result_numeric"])
+corr, p_value = spearmanr(mergedMatches["h2h_home_wins"], mergedMatches["result_numeric"])
 print(f"Spearsman's correlation: {corr:.3f}, p_value: {p_value:.3f}")
-pearson_corr, p_value = pearsonr(mergedMatches["home_xG_avg"], mergedMatches["result_numeric"])
+pearson_corr, p_value = pearsonr(mergedMatches["h2h_home_wins"], mergedMatches["result_numeric"])
 print(f"Pearson's correlation: {pearson_corr:.3f}, p_value: {p_value:.3f}")
 
 #Model Training Logistic and Linear Regression
 #Logistic Regression
 
-X = mergedMatches[["home_xG_avg", "away_xG_avg", "home_team_strength", "away_team_strength", 'goal_diff_delta', 'h2h_home_wins', 'h2h_away_wins', 'h2h_draws', 'h2h_home_goals', 'h2h_away_goals']]
+X = mergedMatches[[ "home_team_strength", "away_team_strength", 'goal_diff_delta', 'h2h_home_wins', 'h2h_away_wins', 'h2h_draws', 'h2h_home_goals', 'h2h_away_goals', 'venue_home_wins', 'venue_away_wins', 'venue_draws', 'venue_home_goals', 'venue_away_goals', 'venue_impact_diff']]
 y = mergedMatches["result_numeric"]
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
@@ -297,64 +352,76 @@ print("MAE:", mean_absolute_error(y_test_away, y_pred_away))
 print("MSE:", mean_squared_error(y_test_away, y_pred_away))
 
 
-
 #Visualization
 
-#seaborn.boxplot(x=df2["goal_diff_delta"], y=df2["result_numeric"])
-#plt.title("Goal Difference Delta vs. Match Result")
-#plt.xlabel("Goal Difference Delta (Home - Away)")
-#plt.ylabel("Match Result")
-#plt.savefig("Boxplot of Goal Difference Delta and Match Result")
-#plt.show()
+h2hHomeWins = mergedMatches['h2h_home_wins'].sum()
+h2hAwayWins = mergedMatches['h2h_away_wins'].sum()
+h2hDraws = mergedMatches['h2h_draws'].sum()
+h2hValues = [h2hHomeWins, h2hAwayWins, h2hDraws]
+labels = ['Home Wins', 'Away Wins', 'Draws']
+resultCounts = mergedMatches['result_numeric'].value_counts()
+
+values = [resultCounts[1], resultCounts[0], resultCounts[-1]]
+
+# Bar Chart
+plt.figure(figsize=(8,5))
+plt.bar(labels, values, color=['blue', 'red', 'gray'])
+plt.xlabel("Match Result")
+plt.ylabel("Count")
+plt.title("Distribution of Match Results")
+plt.savefig(visualizationFolder + "Bar chart of Match Result Distribution")
 
 
-#seaborn.boxplot(x=df2["home_team_strength"], y=df2["result_numeric"])
-#plt.title("Correlation between Home Team Strength and Match Result")
-#plt.xlabel("Home Team Strength (Form + Goal Difference)")
-#plt.ylabel("Match Result")
-#plt.savefig("Boxplot of Home Team Strength and Match Result")
-#plt.show()
+plt.figure(figsize=(8,5))
+plt.hist(mergedMatches["goal_diff_delta"], bins=20, color='purple', alpha=0.7, edgecolor='black')
+plt.xlabel("Goal Difference (Home - Away)")
+plt.ylabel("Frequency")
+plt.title("Distribution of Goal Difference Delta")
+plt.savefig(visualizationFolder + "Histogram of Goal Difference")
 
-#seaborn.boxplot(x=df2["home_team_goal_difference"], y=df2["result_numeric"])
-#plt.title("Correlation between Home Team Goal Difference and Match Result")
-#plt.xlabel("Home Team Goal Difference (Last 5 matches)")
-#plt.ylabel("Match Result")
-#plt.savefig("Boxplot of Home Team Goal Difference and Match Result")
-#plt.show()
-
-#seaborn.boxplot(x=df2["away_team_goal_difference"], y=df2["result_numeric"])
-#plt.title("Correlation between Away Team Goal Difference and Match Result")
-#plt.xlabel("Away Team Goal Difference (Last 5 matches)")
-#plt.ylabel("Match Result")
-#plt.savefig("Boxplot of Away Team Goal Difference and Match Result")
-#plt.show()
-
-#seaborn.boxplot(x=df2["home_team_form"], y=df2["result_numeric"])
-#plt.title("Correlation between Home Team Form and Match Result")
-#plt.xlabel("Home Team Form(%)")
-#plt.ylabel("Match Result")
-#plt.savefig("Boxplot of Home Team Form and Match Result")
-#plt.show()
+plt.figure(figsize=(8,5))
+plt.scatter(mergedMatches["home_xG_avg"], mergedMatches["away_xG_avg"], alpha=0.6, color='green')
+plt.xlabel("Home Team xG Average")
+plt.ylabel("Away Team xG Average")
+plt.title("Home vs Away xG Comparison")
+plt.grid(True)
 
 
-# seaborn.histplot(df['result'])
-# plt.title('Histogram of Match Results')
-# plt.xlabel('Result')
-# plt.ylabel('Frequency')
-# plt.savefig('Histogram of Match Results')
-# plt.show()
+seaborn.boxplot(x=mergedMatches["h2h_home_wins"], y=mergedMatches['result_numeric'])
+plt.title("H2H home wins vs. match result")
+plt.xlabel("H2H home win matches")
+plt.ylabel("Match Result")
+plt.savefig(visualizationFolder + "Boxplot of H2H Home Wins and Match Result")
 
-# seaborn.boxplot(x=df['result'], y=df['home_score'])
-# plt.title('Boxplot of Home Scores by Match Result')
-# plt.xlabel('Result')
-# plt.ylabel('Home Score')
-# plt.savefig('Boxplot of Home Scores')
-# plt.show()
+seaborn.boxplot(x=mergedMatches["h2h_away_wins"], y=mergedMatches['result_numeric'])
+plt.title("H2H aways wins vs. match result")
+plt.xlabel("H2H away win matches")
+plt.ylabel("Match Result")
+plt.savefig(visualizationFolder + "Boxplot of H2H Away Wins and Match Result")
 
-# seaborn.boxplot(x=df['result'], y=df['away_score'])
-# plt.title('Boxplot of Away Scores by Match Result')
-# plt.xlabel('Result')
-# plt.ylabel('Away Score')
-# plt.savefig('Boxplot of Away Scores')
-# plt.show()
+
+seaborn.boxplot(x=mergedMatches["h2h_draws"], y=mergedMatches['result_numeric'])
+plt.title("H2H draws win vs. match result")
+plt.xlabel("H2H draw matches")
+plt.ylabel("Match Result")
+plt.savefig(visualizationFolder + "Boxplot of H2H draws and Match Result")
+
+seaborn.boxplot(x=mergedMatches["h2h_home_goals"], y=mergedMatches['result_numeric'])
+plt.title("H2H home goals  vs. match result")
+plt.xlabel("H2H home goals")
+plt.ylabel("Match Result")
+plt.savefig(visualizationFolder + "Boxplot of H2H Home Goals and Match Result")
+
+seaborn.boxplot(x=mergedMatches["h2h_away_goals"], y=mergedMatches['result_numeric'])
+plt.title("H2H away goals vs. match result")
+plt.xlabel("H2H away goals")
+plt.ylabel("Match Result")
+plt.savefig(visualizationFolder + "Boxplot of H2H Away Goals and Match Result")
+
+
+plt.figure(figsize=(6,6))
+plt.pie(h2hValues, labels=labels, autopct='%1.1f%%', startangle=90, colors=['blue', 'red', 'gray'])
+plt.title('Head-to-Head Results')
+plt.savefig(visualizationFolder + "Pie chart of H2H Results")
+
 
