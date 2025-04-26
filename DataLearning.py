@@ -8,13 +8,14 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from scipy.stats import spearmanr, pearsonr
 import numpy as np
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score, cross_validate, TimeSeriesSplit
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.pipeline import make_pipeline
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_absolute_error, mean_squared_error
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_absolute_error, mean_squared_error, make_scorer
 from dotenv import load_dotenv
 import seaborn as sns
 from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
 load_dotenv()
 API_KEY = os.getenv("API_KEY")
@@ -325,27 +326,27 @@ def venueImpact(row, df):
    ])
 
 
-def attackStrengthPerStats(row, df):
+def offensiveStrengthPerStats(row, df):
    team = row['Team']
    season = row['Season']
 
-   attackStatsFilter = df[(df['Team'] == team) & (df['Season'] == season)]
+   offensiveStatsFilter = df[(df['Team'] == team) & (df['Season'] == season)]
 
-   stats = attackStatsFilter.iloc[0]
+   stats = offensiveStatsFilter.iloc[0]
 
    shotsOnTargetPerGoal = (stats["SoT"] / stats['GF']) * stats['season_weight'] if stats['GF'] != 0 else 0
    shotsPerGoal = (stats["Sh"] / stats['GF']) * stats['season_weight'] if stats['GF'] != 0 else 0
    sotRatio = (stats["SoT"] / stats['Sh']) * stats['season_weight'] if stats['Sh'] != 0 else 0
    goalsPerMatch = (stats["GF"] / stats['GP']) * stats['season_weight'] if stats['GP'] != 0 else 0
 
-   attackStrength = ((shotsOnTargetPerGoal * 2) + (shotsPerGoal * 1.5) + (sotRatio * 1.2) + (goalsPerMatch * 2))
+   offensiveStrength = ((shotsOnTargetPerGoal * 2) + (shotsPerGoal * 1.5) + (sotRatio * 1.2) + (goalsPerMatch * 2))
 
    return pd.Series([
       shotsOnTargetPerGoal,
       shotsPerGoal,
       sotRatio,
       goalsPerMatch,
-      attackStrength
+      offensiveStrength
    ])
 
 def defenseStrengthPerStats(row, df):
@@ -428,7 +429,7 @@ def teamPowerIndex(row, df):
    scaledPoints = teamPoints / gamesPlayedByTeam
    weightPoints = (teamPoints / gamesPlayedByTeam) * teamPowerIndexFilter['season_weight'].sum()
    normalizedPosition = teamPowerIndexFilter['Position'].mean()
-   attackStats = teamPowerIndexFilter['attack_strength'].mean()
+   attackStats = teamPowerIndexFilter['offensive_strength'].mean()
    defenseStats = teamPowerIndexFilter['defense_strength'].mean()
    passingAndPositionStats = teamPowerIndexFilter['passing_and_control_strength'].mean()
    setPieceStats = teamPowerIndexFilter['set_piece_strength'].mean()
@@ -460,8 +461,8 @@ mergedMatches[['h2h_home_wins', 'h2h_away_wins', 'h2h_draws', 'h2h_home_goals', 
 mergedMatches[['venue_home_wins', 'venue_away_wins', 'venue_draws', 'venue_avg_home_goals', 'venue_avg_away_goals', 'venue_impact_diff']] = \
    mergedMatches.apply(lambda row: pd.Series(venueImpact(row, mergedMatches)), axis=1)
 
-mergedSeasonStats[['shots_on_target_per_goal', 'shots_per_goal', 'sot_ratio', 'goals_per_match', 'attack_strength']] = \
-   mergedSeasonStats.apply(lambda row: pd.Series(attackStrengthPerStats(row, mergedSeasonStats)), axis=1)
+mergedSeasonStats[['shots_on_target_per_goal', 'shots_per_goal', 'sot_ratio', 'goals_per_match', 'offensive_strength']] = \
+   mergedSeasonStats.apply(lambda row: pd.Series(offensiveStrengthPerStats(row, mergedSeasonStats)), axis=1)
 mergedSeasonStats[['goals_conceded_per_match', 'fouls_per_match', 'cards_ratio', 'own_goals_ratio', 'defense_strength']] = \
    mergedSeasonStats.apply(lambda row: pd.Series(defenseStrengthPerStats(row, mergedSeasonStats)), axis=1)
 mergedSeasonStats[['pass_accuracy', 'passes_per_game', 'effective_possesion', 'passing_and_control_strength']] = \
@@ -492,30 +493,42 @@ print(f"Spearsman's correlation: {corr:.3f}, p_value: {p_value:.3f}")
 pearson_corr, p_value = pearsonr(mergedMatches["h2h_home_wins"], mergedMatches["result_numeric"])
 print(f"Pearson's correlation: {pearson_corr:.3f}, p_value: {p_value:.3f}")
 
-#Model Training Logistic and Linear Regression
-#Logistic Regression
+#Training models
 
-X = mergedMatches[[ "home_team_strength", "away_team_strength", 'goal_diff_delta', 'h2h_home_wins', 'h2h_away_wins', 'h2h_draws', 'h2h_home_goals', 'h2h_away_goals', 
-                   'venue_home_wins', 'venue_away_wins', 'venue_draws', 'venue_avg_home_goals', 'venue_avg_away_goals', 'venue_impact_diff', 'home_shots_on_target_per_goal', 
+X = mergedMatches[['home_xG_avg', 'away_xG_avg', "home_team_strength", "away_team_strength", 'goal_diff_delta', 'h2h_home_wins','h2h_draws', 'h2h_home_goals', 'h2h_away_goals', 
+                   'venue_home_wins', 'venue_draws', 'venue_avg_home_goals', 'venue_avg_away_goals', 'venue_impact_diff', 'home_shots_on_target_per_goal', 
                    'home_shots_per_goal', 'home_sot_ratio', 'home_goals_per_match', 'away_shots_on_target_per_goal', 
                    'away_shots_per_goal', 'away_sot_ratio', 'away_goals_per_match', 'home_goals_conceded_per_match', 'home_fouls_per_match', 'home_cards_ratio', 
                    'home_own_goals_ratio', 'away_goals_conceded_per_match', 'away_fouls_per_match', 'away_cards_ratio', 
-                   'away_own_goals_ratio', 'home_defense_strength', 'away_defense_strength', 'home_attack_strength', 'away_attack_strength', 'home_corners_per_match', 
+                   'away_own_goals_ratio', 'home_defense_strength', 'away_defense_strength', 'home_offensive_strength', 'away_offensive_strength', 'home_corners_per_match', 
                    'away_corners_per_match' , 'home_free_kicks_per_match', 'away_free_kicks_per_match', 'home_penalties_converted_rate', 'away_penalties_converted_rate',
                    'home_set_piece_strength', 'away_set_piece_strength', 'home_passing_and_control_strength', 'away_passing_and_control_strength', 'home_team_power_index', 
                    'away_team_power_index', 'home_scaled_points', 'away_scaled_points', 'home_normalized_position', 'away_normalized_position', 'home_weight_points',
-                   'away_weight_points']]
-y = mergedMatches["result_numeric"]
+                   'away_weight_points', 'home_effective_possesion', 'away_effective_possesion', 'home_pass_accuracy', 'away_pass_accuracy']]
 
+y = mergedMatches["result_numeric"]
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-model =  make_pipeline(StandardScaler(), LogisticRegression(class_weight='balanced', solver='lbfgs', max_iter=1000))
+
+#Logistic Regression 
+model =  make_pipeline(StandardScaler(), LogisticRegression(penalty='l2', class_weight='balanced', solver='lbfgs', max_iter=1000))
 model.fit(X_train, y_train)
 
 
 y_pred = model.predict(X_test)
-print("Accuracy: ", accuracy_score(y_test, y_pred))
+print("Logistic Regression Accuracy: ", accuracy_score(y_test, y_pred))
 print("Classification Report: ", classification_report(y_test, y_pred))
 print("Confusion Matrix: ", confusion_matrix(y_test, y_pred))
+
+
+#Random Forest Classifier
+rf_model = make_pipeline(StandardScaler(), RandomForestClassifier(n_estimators=300, random_state=42, class_weight='balanced'))
+rf_model.fit(X_train, y_train)
+
+y_pred_rf = rf_model.predict(X_test)
+
+print("Random Forest Classifier - Accuracy: ", accuracy_score(y_test, y_pred_rf))
+print("Classification Report:\n", classification_report(y_test, y_pred_rf))
+print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred_rf))
 
 #Linear Regression
 
@@ -523,25 +536,51 @@ print("Confusion Matrix: ", confusion_matrix(y_test, y_pred))
 y_home_goals = mergedMatches["Home Goals"]
 y_away_goals = mergedMatches["Away Goals"]
 
-X_train, X_test, y_train_home, y_test_home = train_test_split(X, y_home_goals, test_size=0.2, random_state=42)
-X_train, X_test, y_train_away, y_test_away = train_test_split(X, y_away_goals, test_size=0.2, random_state=42)
+# Split for Home Goals
+X_train_home, X_test_home, y_train_home, y_test_home = train_test_split(X, y_home_goals, test_size=0.2, random_state=42)
+
+# Split for Away Goals
+X_train_away, X_test_away, y_train_away, y_test_away = train_test_split(X, y_away_goals, test_size=0.2, random_state=42)
 
 
-home_goals_model = LinearRegression()
-away_goals_model = LinearRegression()
-home_goals_model.fit(X_train, y_train_home)
-away_goals_model.fit(X_train, y_train_away)
+home_goals_model = make_pipeline(StandardScaler(), LinearRegression())
+away_goals_model = make_pipeline(StandardScaler(), LinearRegression())
+home_goals_model.fit(X_train_home, y_train_home)
+away_goals_model.fit(X_train_away, y_train_away)
 
-y_pred_home = home_goals_model.predict(X_test)
-y_pred_away = away_goals_model.predict(X_test)
+y_pred_home = home_goals_model.predict(X_test_home)
+y_pred_away = away_goals_model.predict(X_test_away)
 
-print("Home Goals Prediction:")
+print("Linear Regression - Home Goals Prediction:")
 print("MAE:", mean_absolute_error(y_test_home, y_pred_home))
 print("MSE:", mean_squared_error(y_test_home, y_pred_home))
 
-print("\nAway Goals Prediction:")
+print("\nLinear Regression - Away Goals Prediction:")
 print("MAE:", mean_absolute_error(y_test_away, y_pred_away))
 print("MSE:", mean_squared_error(y_test_away, y_pred_away))
+
+#Random Forest Regressor
+
+# Models
+home_goals_rf = make_pipeline(StandardScaler(), RandomForestRegressor(n_estimators=100, random_state=42))
+away_goals_rf = make_pipeline(StandardScaler(), RandomForestRegressor(n_estimators=100, random_state=42))
+
+# Train
+home_goals_rf.fit(X_train_home, y_train_home)
+away_goals_rf.fit(X_train_away, y_train_away)
+
+# Predict
+y_pred_home_rf = home_goals_rf.predict(X_test_home)
+y_pred_away_rf = away_goals_rf.predict(X_test_away)
+
+# Evaluation
+print("Random Forest Regressor - Home Goals Prediction:")
+print("MAE:", mean_absolute_error(y_test_home, y_pred_home_rf))
+print("MSE:", mean_squared_error(y_test_home, y_pred_home_rf))
+
+print("\nRandom Forest Regressor - Away Goals Prediction:")
+print("MAE:", mean_absolute_error(y_test_away, y_pred_away_rf))
+print("MSE:", mean_squared_error(y_test_away, y_pred_away_rf))
 
 probs = model.predict_proba(X_test)
 
@@ -549,6 +588,11 @@ importances = model.named_steps['logisticregression'].coef_[0]
 feature_importance_df = pd.DataFrame({'Feature': X.columns, 'Importance': importances})
 print(feature_importance_df.sort_values(by='Importance', ascending=False))
 
+
+rf_model_step = rf_model.named_steps['randomforestclassifier']
+importancesRF = rf_model_step.feature_importances_
+feature_importance_rf = pd.DataFrame({'Feature': X.columns, 'Importance RF': importancesRF})
+print(feature_importance_rf.sort_values(by='Importance RF', ascending=False))
 
 
 #Visualization
@@ -658,7 +702,7 @@ plt.figure(figsize=(10, 8))
 corr_features = mergedSeasonStats[[
     "shots_on_target_per_goal", "shots_per_goal", "sot_ratio", "goals_per_match",
     "goals_conceded_per_match", "fouls_per_match", "cards_ratio",
-    "own_goals_ratio", 'attack_strength', 'defense_strength', 'corners_per_match', 'free_kicks_per_match',
+    "own_goals_ratio", 'offensive_strength', 'defense_strength', 'corners_per_match', 'free_kicks_per_match',
     'penalties_converted_rate','set_piece_strength', 'passing_and_control_strength', 'team_power_index'
 ]]
 sns.heatmap(corr_features.corr(), annot=True, cmap="coolwarm", fmt=".2f")
@@ -697,5 +741,12 @@ plt.ylabel("Normalized Position)")
 plt.xticks(rotation=90)
 plt.tight_layout()
 plt.savefig(visualizationFolder + "Barplot of Normalized postion by Team")
+
+plt.figure(figsize=(12, 8))
+sns.barplot(data=feature_importance_df.sort_values(by='Importance', ascending=False).head(20),
+            x='Importance', y='Feature', palette='viridis')
+plt.title("Top 20 Feature Importances (Logistic Regression)")
+plt.savefig(visualizationFolder + "Barplot of top 20 importance features")
+
 
 
