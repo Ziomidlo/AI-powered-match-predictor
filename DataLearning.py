@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from scipy.stats import spearmanr, pearsonr
 import numpy as np
-from sklearn.model_selection import train_test_split, cross_val_score, cross_validate, TimeSeriesSplit
+from sklearn.model_selection import train_test_split, RandomizedSearchCV, TimeSeriesSplit
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_absolute_error, mean_squared_error, make_scorer
@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+import scipy.stats as stats
 
 load_dotenv()
 API_KEY = os.getenv("API_KEY")
@@ -197,7 +198,7 @@ missingColumns = ['Sh', 'SoT', 'FK', 'PK', 'Cmp', 'Att', 'Cmp%', 'CK', 'CrdY', '
 teamAverageStats = pastSeasonsStats.groupby("Team").mean(numeric_only=True).__round__(2)
 season2023 = pastSeasonsStats[pastSeasonsStats['Season'] == "2023/2024"]
 bottomFiveTeams = season2023.sort_values("Position", ascending=False).head(5)
-bottomFiveAvgStats = bottomFiveTeams[missingColumns].mean(numeric_only=True)
+bottomFiveAvgStats = bottomFiveTeams[missingColumns].mean(numeric_only=True) 
 
 for col in missingColumns:
     teamStandingsDf[col] = teamStandingsDf.apply(
@@ -334,10 +335,10 @@ def offensiveStrengthPerStats(row, df):
 
    stats = offensiveStatsFilter.iloc[0]
 
-   shotsOnTargetPerGoal = (stats["SoT"] / stats['GF']) * stats['season_weight'] if stats['GF'] != 0 else 0
-   shotsPerGoal = (stats["Sh"] / stats['GF']) * stats['season_weight'] if stats['GF'] != 0 else 0
-   sotRatio = (stats["SoT"] / stats['Sh']) * stats['season_weight'] if stats['Sh'] != 0 else 0
-   goalsPerMatch = (stats["GF"] / stats['GP']) * stats['season_weight'] if stats['GP'] != 0 else 0
+   shotsOnTargetPerGoal = (stats["SoT"] / stats['GF']) if stats['GF'] != 0 else 0
+   shotsPerGoal = (stats["Sh"] / stats['GF'])  if stats['GF'] != 0 else 0
+   sotRatio = (stats["SoT"] / stats['Sh'])if stats['Sh'] != 0 else 0
+   goalsPerMatch = (stats["GF"] / stats['GP']) if stats['GP'] != 0 else 0
 
    offensiveStrength = ((shotsOnTargetPerGoal * 2) + (shotsPerGoal * 1.5) + (sotRatio * 1.2) + (goalsPerMatch * 2))
 
@@ -357,10 +358,10 @@ def defenseStrengthPerStats(row, df):
 
    stats = defenseStatsFilter.iloc[0]
 
-   goalsConcededPerMatch = (stats['GA'] / stats['GP']) * stats['season_weight'] if stats['GP'] != 0 else 0
-   foulsPerMatch = (stats['Fls'] / stats['GP']) * stats['season_weight'] if stats['GP'] != 0 else 0
-   cardsRatio = ((stats['CrdY'] + stats['CrdR']) / stats['GP']) * stats['season_weight'] if stats['GP'] != 0 else 0
-   ownGoalsRatio = (stats['OG'] / stats['GP']) * stats['season_weight'] if stats['GP'] != 0 else 0 
+   goalsConcededPerMatch = (stats['GA'] / stats['GP'])  if stats['GP'] != 0 else 0
+   foulsPerMatch = (stats['Fls'] / stats['GP'])  if stats['GP'] != 0 else 0
+   cardsRatio = ((stats['CrdY'] + stats['CrdR']) / stats['GP'])  if stats['GP'] != 0 else 0
+   ownGoalsRatio = (stats['OG'] / stats['GP'])  if stats['GP'] != 0 else 0 
 
    defenseStrength = 1 / ((goalsConcededPerMatch * 1.5) + foulsPerMatch + cardsRatio + ownGoalsRatio + 1e-5)
 
@@ -380,10 +381,10 @@ def passingAndControlStats(row, df):
 
    stats = statsFilter.iloc[0]
 
-   gamesPlayed = stats['GP'] * stats['season_weight']
-   passAttempted = stats['Att'] * stats['season_weight']
-   passCompleted = stats['Cmp'] * stats['season_weight'] 
-   passCompletion = stats['Cmp%'] * stats['season_weight']
+   gamesPlayed = stats['GP'] 
+   passAttempted = stats['Att'] 
+   passCompleted = stats['Cmp'] 
+   passCompletion = stats['Cmp%'] 
 
    passAccuracy = passCompletion
    passesPerGame = passAttempted / gamesPlayed if gamesPlayed != 0 else 0
@@ -426,19 +427,21 @@ def teamPowerIndex(row, df):
 
    teamPoints = teamPowerIndexFilter['Pts'].sum()
    gamesPlayedByTeam = teamPowerIndexFilter['GP'].sum()
-   scaledPoints = teamPoints / gamesPlayedByTeam
-   weightPoints = (teamPoints / gamesPlayedByTeam) * teamPowerIndexFilter['season_weight'].sum()
-   normalizedPosition = teamPowerIndexFilter['Position'].mean()
+   seasonCounter = teamPowerIndexFilter['Season'].count() 
+   seasonWeight = teamPowerIndexFilter['season_weight'].sum()
    attackStats = teamPowerIndexFilter['offensive_strength'].mean()
    defenseStats = teamPowerIndexFilter['defense_strength'].mean()
    passingAndPositionStats = teamPowerIndexFilter['passing_and_control_strength'].mean()
    setPieceStats = teamPowerIndexFilter['set_piece_strength'].mean()
+   avgPositionOverall = teamPowerIndexFilter['Position'].mean()
+   avgPointsPerGame = teamPoints / gamesPlayedByTeam
+   weightPoints = (teamPoints / gamesPlayedByTeam) * seasonWeight
    
-   tpi = (attackStats * 2) + (setPieceStats) + passingAndPositionStats - (defenseStats * 2) + (scaledPoints * 1.5) - (normalizedPosition * 1.5) + (weightPoints * 1.5) 
+   tpi = ((attackStats * 2) + (setPieceStats) + passingAndPositionStats - (defenseStats * 2) - (avgPositionOverall * 2) + (avgPointsPerGame * 2) + (weightPoints * 2)) * seasonWeight / seasonCounter
 
    return pd.Series ([tpi,
-                     scaledPoints,
-                     normalizedPosition,
+                     avgPositionOverall,
+                     avgPointsPerGame,
                      weightPoints
                      ])
 
@@ -469,7 +472,7 @@ mergedSeasonStats[['pass_accuracy', 'passes_per_game', 'effective_possesion', 'p
    mergedSeasonStats.apply(lambda row: pd.Series(passingAndControlStats(row, mergedSeasonStats)), axis=1)
 mergedSeasonStats[['corners_per_match', 'free_kicks_per_match', 'penalties_converted_rate', 'set_piece_strength']] = \
    mergedSeasonStats.apply(lambda row: pd.Series(setPieceStrength(row, mergedSeasonStats)), axis=1)
-mergedSeasonStats[["team_power_index", 'scaled_points', 'normalized_position', 'weight_points']] = mergedSeasonStats.apply(lambda row: pd.Series(teamPowerIndex(row, mergedSeasonStats)), axis=1)
+mergedSeasonStats[["team_power_index", 'avg_position_ovr', 'avg_points_per_game', 'weight_points']] = mergedSeasonStats.apply(lambda row: pd.Series(teamPowerIndex(row, mergedSeasonStats)), axis=1)
 
 homeSeasonStats = mergedSeasonStats.copy()
 homeSeasonStats = homeSeasonStats.add_prefix("home_")
@@ -495,22 +498,45 @@ print(f"Pearson's correlation: {pearson_corr:.3f}, p_value: {p_value:.3f}")
 
 #Training models
 
-X = mergedMatches[['home_xG_avg', 'away_xG_avg', "home_team_strength", "away_team_strength", 'goal_diff_delta', 'h2h_home_wins','h2h_draws', 'h2h_home_goals', 'h2h_away_goals', 
-                   'venue_home_wins', 'venue_draws', 'venue_avg_home_goals', 'venue_avg_away_goals', 'venue_impact_diff', 'home_shots_on_target_per_goal', 
-                   'home_shots_per_goal', 'home_sot_ratio', 'home_goals_per_match', 'away_shots_on_target_per_goal', 
-                   'away_shots_per_goal', 'away_sot_ratio', 'away_goals_per_match', 'home_goals_conceded_per_match', 'home_fouls_per_match', 'home_cards_ratio', 
-                   'home_own_goals_ratio', 'away_goals_conceded_per_match', 'away_fouls_per_match', 'away_cards_ratio', 
-                   'away_own_goals_ratio', 'home_defense_strength', 'away_defense_strength', 'home_offensive_strength', 'away_offensive_strength', 'home_corners_per_match', 
-                   'away_corners_per_match' , 'home_free_kicks_per_match', 'away_free_kicks_per_match', 'home_penalties_converted_rate', 'away_penalties_converted_rate',
-                   'home_set_piece_strength', 'away_set_piece_strength', 'home_passing_and_control_strength', 'away_passing_and_control_strength', 'home_team_power_index', 
-                   'away_team_power_index', 'home_scaled_points', 'away_scaled_points', 'home_normalized_position', 'away_normalized_position', 'home_weight_points',
-                   'away_weight_points', 'home_effective_possesion', 'away_effective_possesion', 'home_pass_accuracy', 'away_pass_accuracy']]
+X = mergedMatches[['home_xG_avg', 'away_xG_avg','goal_diff_delta', 'home_team_strength', 'away_team_strength', 
+                   'h2h_home_wins', 'h2h_away_wins', 'h2h_draws', 'h2h_home_goals', 'h2h_away_goals', 
+                   'venue_home_wins','venue_away_wins', 'venue_draws', 'venue_avg_home_goals', 'venue_avg_away_goals', 'venue_impact_diff',
+                   'home_defense_strength', 'away_defense_strength', 'home_offensive_strength', 'away_offensive_strength', 'home_passing_and_control_strength', 
+                   'away_passing_and_control_strength', 'home_team_power_index', 'away_team_power_index', 'home_avg_points_per_game', 'away_avg_points_per_game',
+                   'home_avg_position_ovr', 'away_avg_position_ovr', 'home_weight_points', 'away_weight_points']]
 
 y = mergedMatches["result_numeric"]
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+tscv_tuning = TimeSeriesSplit(n_splits= 5)
+
+#Logistic Regression tuning
+def logisticRegressionTuning():
+   print("--- Tuning Logistic Regression ---")
+
+   lr_pipeline = make_pipeline(StandardScaler(), LogisticRegression(class_weight='balanced', max_iter= 5000))
+
+   param_distributions_lr = {
+      'logisticregression__C': stats.loguniform(0.001, 100),
+      'logisticregression__penalty' : ['l2', 'l1'],
+      'logisticregression__solver' : ['lbfgs', 'saga']
+   }
+
+   random_search_lr = RandomizedSearchCV(lr_pipeline, param_distributions_lr, n_iter=100, cv=tscv_tuning, scoring='accuracy', random_state=42,  n_jobs=-1)
+
+   print("Starting Tuning Logistic Regression...")
+   random_search_lr.fit(X, y)
+
+   print("\n--- Results of Tuning  Logistic Regression ---")
+   print("Best parameters:", random_search_lr.best_params_)
+   print("Best average Result CV (Accuracy): ", random_search_lr.best_score_)
+
+   best_lr_model = random_search_lr.best_estimator_
+   print("Best Model:", best_lr_model)
 
 #Logistic Regression 
-model =  make_pipeline(StandardScaler(), LogisticRegression(penalty='l2', class_weight='balanced', solver='lbfgs', max_iter=1000))
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+model =  make_pipeline(StandardScaler(), LogisticRegression(penalty='l2', class_weight='balanced', solver='lbfgs', max_iter=5000, random_state=42, C=0.008))
 model.fit(X_train, y_train)
 
 
@@ -520,8 +546,34 @@ print("Classification Report: ", classification_report(y_test, y_pred))
 print("Confusion Matrix: ", confusion_matrix(y_test, y_pred))
 
 
-#Random Forest Classifier
-rf_model = make_pipeline(StandardScaler(), RandomForestClassifier(n_estimators=300, random_state=42, class_weight='balanced'))
+#Random Forest Classifier Tuning
+def randomForestClassifierTuning():
+   print("\n--- Tuning Random Forest Classifier ---")
+
+   rf_clf_pipeline = make_pipeline(StandardScaler(), RandomForestClassifier(random_state=42, class_weight='balanced'))
+
+   param_distributions_rf_clf = {
+      'randomforestclassifier__n_estimators' : stats.randint(100, 1000),
+      'randomforestclassifier__max_depth' : [None] + list(stats.randint(5,30).rvs(10)),
+      'randomforestclassifier__min_samples_split': stats.randint(2, 50),
+      'randomforestclassifier__min_samples_leaf': stats.randint(1, 30),
+      'randomforestclassifier__max_features': ['sqrt', 'log2', None], 
+      'randomforestclassifier__criterion': ['gini', 'entropy'],
+   }
+
+   print("Startning tuning Random Forest Classifier...")
+   random_search_rf_clf = RandomizedSearchCV(rf_clf_pipeline, param_distributions_rf_clf, n_iter=100, scoring="accuracy", random_state=42, n_jobs=-1)
+   random_search_rf_clf.fit(X, y)
+
+   print("\n--- Results of Tuning Random Forest Classifier ---")
+   print("Best parameters:", random_search_rf_clf.best_params_)
+   print("Best average Result CV (Accuracy):", random_search_rf_clf.best_score_)
+
+   best_rf_clf_model = random_search_rf_clf.best_estimator_
+   print("Best model:", best_rf_clf_model)
+
+#Random Forest Classifier scores
+rf_model = make_pipeline(StandardScaler(), RandomForestClassifier(criterion='gini', n_estimators=445, random_state=42, class_weight='balanced', max_depth=22, min_samples_leaf=4, min_samples_split=20))
 rf_model.fit(X_train, y_train)
 
 y_pred_rf = rf_model.predict(X_test)
@@ -559,21 +611,60 @@ print("\nLinear Regression - Away Goals Prediction:")
 print("MAE:", mean_absolute_error(y_test_away, y_pred_away))
 print("MSE:", mean_squared_error(y_test_away, y_pred_away))
 
-#Random Forest Regressor
 
-# Models
-home_goals_rf = make_pipeline(StandardScaler(), RandomForestRegressor(n_estimators=100, random_state=42))
-away_goals_rf = make_pipeline(StandardScaler(), RandomForestRegressor(n_estimators=100, random_state=42))
+#Random Forest Regressor Tuning
 
-# Train
+
+def randomForestRegressorTuning():
+   print("--- Tuning for Random Forest Regressor ---")
+   rf_reg_pipeline = make_pipeline(StandardScaler(), RandomForestRegressor(random_state=42))
+
+   param_distributions_rf_reg = {
+      'randomforestregressor__n_estimators': stats.randint(100, 1000),
+      'randomforestregressor__max_depth': [None] + list(stats.randint(5, 30).rvs(10)),
+      'randomforestregressor__min_samples_split': stats.randint(2, 50),
+      'randomforestregressor__min_samples_leaf': stats.randint(1, 30),
+      'randomforestregressor__max_features': ['sqrt', 'log2', None],
+      'randomforestregressor__criterion': ['squared_error', 'absolute_error'] 
+   }
+
+   mae_scorer = make_scorer(mean_absolute_error)
+
+   print("Starting Tuning for Random Forest Regressor...")
+   random_search_rf_reg = RandomizedSearchCV(rf_reg_pipeline, param_distributions_rf_reg, n_iter=100, cv=tscv_tuning, scoring=mae_scorer, random_state=42, n_jobs=-1 )
+
+   print("Tuning for Home Goals...")
+   random_search_rf_reg_home = random_search_rf_reg.fit(X, y_home_goals)
+
+   print("\n--- Results of Tuning Random Forest Regressor (Home Goals) ---")
+   print("Best parameters:", random_search_rf_reg_home.best_params_)
+   print("Best average result CV (MAE):", random_search_rf_reg_home.best_score_)
+
+   best_rf_reg_home_model = random_search_rf_reg_home.best_estimator_
+   print("Best model:", best_rf_reg_home_model)
+
+   print("Tuning for Away Goals...")
+   random_search_rf_reg_away = random_search_rf_reg.fit(X, y_away_goals)
+
+   print("\n--- Results of Tuning Random Forest Regressor (Away Goals) ---")
+   print("Best parameters:", random_search_rf_reg_away.best_params_)
+   print("Best average result CV (MAE):", random_search_rf_reg_away.best_score_)
+
+   best_rf_reg_away_model = random_search_rf_reg_away.best_estimator_
+   print("Best model:", best_rf_reg_away_model)
+
+
+#Random Forest Regressor Scores
+
+home_goals_rf = make_pipeline(StandardScaler(), RandomForestRegressor(n_estimators=838, random_state=42, max_depth=23, max_features='log2', min_samples_leaf=27, min_samples_split=36))
+away_goals_rf = make_pipeline(StandardScaler(), RandomForestRegressor(n_estimators=956, random_state=42, max_depth=11, max_features='log2', min_samples_leaf=29, min_samples_split=45))
+
 home_goals_rf.fit(X_train_home, y_train_home)
 away_goals_rf.fit(X_train_away, y_train_away)
 
-# Predict
 y_pred_home_rf = home_goals_rf.predict(X_test_home)
 y_pred_away_rf = away_goals_rf.predict(X_test_away)
 
-# Evaluation
 print("Random Forest Regressor - Home Goals Prediction:")
 print("MAE:", mean_absolute_error(y_test_home, y_pred_home_rf))
 print("MSE:", mean_squared_error(y_test_home, y_pred_home_rf))
@@ -593,6 +684,10 @@ rf_model_step = rf_model.named_steps['randomforestclassifier']
 importancesRF = rf_model_step.feature_importances_
 feature_importance_rf = pd.DataFrame({'Feature': X.columns, 'Importance RF': importancesRF})
 print(feature_importance_rf.sort_values(by='Importance RF', ascending=False))
+
+logisticRegressionTuning()
+randomForestRegressorTuning()
+randomForestClassifierTuning()
 
 
 #Visualization
@@ -703,12 +798,49 @@ corr_features = mergedSeasonStats[[
     "shots_on_target_per_goal", "shots_per_goal", "sot_ratio", "goals_per_match",
     "goals_conceded_per_match", "fouls_per_match", "cards_ratio",
     "own_goals_ratio", 'offensive_strength', 'defense_strength', 'corners_per_match', 'free_kicks_per_match',
-    'penalties_converted_rate','set_piece_strength', 'passing_and_control_strength', 'team_power_index'
+    'penalties_converted_rate','set_piece_strength', 'passing_and_control_strength', 'avg_position_ovr', 'avg_points_per_game', 'weight_points', 'team_power_index'
 ]]
 sns.heatmap(corr_features.corr(), annot=True, cmap="coolwarm", fmt=".2f")
-plt.title("Correlation Between Attack & Defense Metrics")
+plt.title("Correlation Between Season stats")
 plt.tight_layout()
-plt.savefig(visualizationFolder + "Heatmap of correlation between attack and defense metrics")
+plt.savefig(visualizationFolder + "Heatmap of correlation between Season stats")
+
+plt.figure(figsize=(10, 8))
+offensive_features = mergedSeasonStats[["shots_on_target_per_goal", "shots_per_goal", "sot_ratio", "goals_per_match", 'offensive_strength', 'team_power_index']]
+sns.heatmap(offensive_features.corr(), annot=True, cmap="coolwarm", fmt=".2f")
+plt.title("Correlation Between Offensive Metrics")
+plt.tight_layout()
+plt.savefig(visualizationFolder + "Heatmap of correlation between offensive metrics And Team Power Index")
+
+plt.figure(figsize=(10, 8))
+defensive_feature = mergedSeasonStats[["goals_conceded_per_match", "fouls_per_match", "cards_ratio", "own_goals_ratio", "defense_strength", 'team_power_index']]
+sns.heatmap(defensive_feature.corr(), annot=True, cmap="coolwarm", fmt=".2f")
+plt.title("Correlation Between Defensive Metrics")
+plt.tight_layout()
+plt.savefig(visualizationFolder + "Heatmap of correlation between Defensive metrics And Team Power Index")
+
+plt.figure(figsize=(10, 8))
+passing_control_feature = mergedSeasonStats[['pass_accuracy', 'passes_per_game', 'effective_possesion', 'passing_and_control_strength', 'team_power_index']]
+sns.heatmap(passing_control_feature.corr(), annot=True, cmap="coolwarm", fmt=".2f")
+plt.title("Correlation Between Passing & Control Metrics")
+plt.tight_layout()
+plt.savefig(visualizationFolder + "Heatmap of correlation between Passing & Control metrics And Team Power Index")
+
+plt.figure(figsize=(10, 8))
+set_piece_feature = mergedSeasonStats[['corners_per_match', 'free_kicks_per_match', 'penalties_converted_rate', 'set_piece_strength', 'team_power_index']]
+sns.heatmap(set_piece_feature.corr(), annot=True, cmap="coolwarm", fmt=".2f")
+plt.title("Correlation Between Set Piece Metrics")
+plt.tight_layout()
+plt.savefig(visualizationFolder + "Heatmap of correlation between Set Piece metrics And Team Power Index")
+
+plt.figure(figsize=(12, 6))
+sns.barplot(data=mergedSeasonStats, x="Team", y="weight_points")
+plt.title("Weight points By Team")
+plt.ylabel("Weight Points")
+plt.xticks(rotation=90)
+plt.tight_layout()
+plt.savefig(visualizationFolder + "Barplot of Weight Points by Team")
+
 
 plt.figure(figsize=(12, 6))
 sns.barplot(data=mergedSeasonStats, x="Team", y="team_power_index")
@@ -719,20 +851,36 @@ plt.tight_layout()
 plt.savefig(visualizationFolder + "Barplot of Team Power Index")
 
 plt.figure(figsize=(12, 6))
+sns.barplot(data=mergedSeasonStats, x="Team", y="avg_points_per_game")
+plt.title("Average Points Per Game By Team")
+plt.ylabel("Average Points Per Game")
+plt.xticks(rotation=90)
+plt.tight_layout()
+plt.savefig(visualizationFolder + "Barplot of Average Points Per Game by Team")
+
+plt.figure(figsize=(12, 6))
+sns.barplot(data=mergedSeasonStats, x="Team", y="avg_position_ovr")
+plt.title("Average Position Overall By Team")
+plt.ylabel("Average Position Overall")
+plt.xticks(rotation=90)
+plt.tight_layout()
+plt.savefig(visualizationFolder + "Barplot of Average Position Overall by Team")
+
+plt.figure(figsize=(13, 8))
+sns.barplot(data=feature_importance_df.sort_values(by='Importance', ascending=False).head(20),
+            x='Importance', y='Feature', palette='viridis')
+plt.title("Top 20 Feature Importances (Logistic Regression)")
+plt.savefig(visualizationFolder + "Barplot of top 20 importance features")
+
+
+'''
+plt.figure(figsize=(12, 6))
 sns.barplot(data=mergedSeasonStats, x="Team", y="scaled_points")
 plt.title("Scaled points By Team")
 plt.ylabel("Scaled Points")
 plt.xticks(rotation=90)
 plt.tight_layout()
 plt.savefig(visualizationFolder + "Barplot of Scaled Points by Team")
-
-plt.figure(figsize=(12, 6))
-sns.barplot(data=mergedSeasonStats, x="Team", y="weight_points")
-plt.title("Weight points By Team")
-plt.ylabel("Weight Points")
-plt.xticks(rotation=90)
-plt.tight_layout()
-plt.savefig(visualizationFolder + "Barplot of Weight Points by Team")
 
 plt.figure(figsize=(12, 6))
 sns.barplot(data=mergedSeasonStats, x="Team", y="normalized_position")
@@ -742,11 +890,14 @@ plt.xticks(rotation=90)
 plt.tight_layout()
 plt.savefig(visualizationFolder + "Barplot of Normalized postion by Team")
 
-plt.figure(figsize=(12, 8))
-sns.barplot(data=feature_importance_df.sort_values(by='Importance', ascending=False).head(20),
-            x='Importance', y='Feature', palette='viridis')
-plt.title("Top 20 Feature Importances (Logistic Regression)")
-plt.savefig(visualizationFolder + "Barplot of top 20 importance features")
+plt.figure(figsize=(12, 6))
+sns.barplot(data=mergedSeasonStats, x="Team", y="weight_position")
+plt.title("Weight Position By Team")
+plt.ylabel("Weight Position)")
+plt.xticks(rotation=90)
+plt.tight_layout()
+plt.savefig(visualizationFolder + "Barplot of Weight postion by Team")
+'''
 
 
 
