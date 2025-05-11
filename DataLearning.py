@@ -136,8 +136,21 @@ for match in finishedMatches:
 
 #Creating Data Frames & Analysis
 
+missingColumns = ['Sh', 'SoT', 'FK', 'PK', 'Cmp', 'Att', 'Cmp%', 'CK', 'CrdY', 'CrdR', 'Fls', 'PKcon', 'OG']
+teamAverageStats = pastSeasonsStats.groupby("Team").mean(numeric_only=True).__round__(2)
+season2023 = pastSeasonsStats[pastSeasonsStats['Season'] == "2023/2024"]
+bottomFiveTeams = season2023.sort_values("Position", ascending=False).head(5)
+bottomFiveAvgStats = bottomFiveTeams[missingColumns].mean(numeric_only=True) 
+
 teamStandingsDf = pd.DataFrame.from_dict(structuredTeamStandings, orient="index").reset_index()
 teamStandingsDf = teamStandingsDf.rename(columns={'index': 'Team'})
+
+for col in missingColumns:
+    teamStandingsDf[col] = teamStandingsDf.apply(
+        lambda row: teamAverageStats.loc[row['Team'], col] 
+        if row['Team'] in teamAverageStats.index else bottomFiveAvgStats[col],
+        axis=1
+    )
 #print(df.head())
 
 currentMatchesDf = pd.DataFrame(structuredCurrentSeasonMatches)
@@ -157,25 +170,14 @@ pastMatches.isnull().sum()
 pastMatches.nunique()
 pastMatches.describe()
 
-pastSeasonsStats = pastSeasonsStats.sort_values(by='Season', ascending=False)
-print(pastSeasonsStats.head())
-pastSeasonsStats.info()
-pastSeasonsStats.isnull().sum()
-pastSeasonsStats.nunique()
-pastSeasonsStats.describe()
+mergedSeasonStats = pd.concat([teamStandingsDf, pastSeasonsStats], ignore_index=True)
 
-homeStats = pastSeasonsStats.copy()
-homeStats = homeStats.add_prefix("home_")
-homeStats = homeStats.rename(columns={"home_Season": "Season"})
-homeStats = homeStats.rename(columns={"home_Team" : "Home"})
-homeStats.info()
-
-awayStats = pastSeasonsStats.copy()
-awayStats = awayStats.add_prefix("away_")
-awayStats = awayStats.rename(columns={"away_Season" : "Season"})
-awayStats = awayStats.rename(columns={"away_Team" : "Away"})
-awayStats.info()
-
+mergedSeasonStats = mergedSeasonStats.sort_values(by='Season', ascending=False)
+print(mergedSeasonStats.head())
+mergedSeasonStats.info()
+mergedSeasonStats.isnull().sum()
+mergedSeasonStats.nunique()
+mergedSeasonStats.describe()
 
 mergedMatches = pd.concat([currentMatchesDf, pastMatches], ignore_index=True)
 venueMapping = pastMatches[['Home', 'Venue']].drop_duplicates()
@@ -187,27 +189,18 @@ mergedMatches['Match'] = mergedMatches['Match'].fillna('FINISHED')
 mergedMatches['GD'] = mergedMatches['GD'].fillna(mergedMatches['Home Goals'] - mergedMatches['Away Goals'])
 
 mergedMatches['Date'] = pd.to_datetime(mergedMatches['Date']).dt.date
-mergedMatches = pd.merge(mergedMatches, homeStats, on=['Season', 'Home'], how='left')
-mergedMatches = pd.merge(mergedMatches, awayStats, on=['Season', 'Away'], how='left')
 mergedMatches.info()
 mergedMatches.isnull().sum()
 mergedMatches.nunique()
 mergedMatches.describe()
 
-missingColumns = ['Sh', 'SoT', 'FK', 'PK', 'Cmp', 'Att', 'Cmp%', 'CK', 'CrdY', 'CrdR', 'Fls', 'PKcon', 'OG']
-teamAverageStats = pastSeasonsStats.groupby("Team").mean(numeric_only=True).__round__(2)
-season2023 = pastSeasonsStats[pastSeasonsStats['Season'] == "2023/2024"]
-bottomFiveTeams = season2023.sort_values("Position", ascending=False).head(5)
-bottomFiveAvgStats = bottomFiveTeams[missingColumns].mean(numeric_only=True) 
 
-for col in missingColumns:
-    teamStandingsDf[col] = teamStandingsDf.apply(
-        lambda row: teamAverageStats.loc[row['Team'], col] 
-        if row['Team'] in teamAverageStats.index else bottomFiveAvgStats[col],
-        axis=1
-    )
 teamStandingsDf[missingColumns] = teamStandingsDf[missingColumns].round(2)
-mergedSeasonStats = pd.concat([teamStandingsDf, pastSeasonsStats], ignore_index=True)
+teamStandingsDf.info()
+teamStandingsDf.isnull().sum()
+teamStandingsDf.info()
+teamStandingsDf.describe()
+
 mergedSeasonStats['GP'] = mergedSeasonStats['GP'].fillna(38.0)
 mergedSeasonStats.info()
 mergedSeasonStats.isnull().sum()
@@ -340,7 +333,7 @@ def offensiveStrengthPerStats(row, df):
    sotRatio = (stats["SoT"] / stats['Sh'])if stats['Sh'] != 0 else 0
    goalsPerMatch = (stats["GF"] / stats['GP']) if stats['GP'] != 0 else 0
 
-   offensiveStrength = ((shotsOnTargetPerGoal * 2) + (shotsPerGoal * 1.5) + (sotRatio * 1.2) + (goalsPerMatch * 2))
+   offensiveStrength = (shotsOnTargetPerGoal + shotsPerGoal + sotRatio + goalsPerMatch)
 
    return pd.Series([
       shotsOnTargetPerGoal,
@@ -363,7 +356,7 @@ def defenseStrengthPerStats(row, df):
    cardsRatio = ((stats['CrdY'] + stats['CrdR']) / stats['GP'])  if stats['GP'] != 0 else 0
    ownGoalsRatio = (stats['OG'] / stats['GP'])  if stats['GP'] != 0 else 0 
 
-   defenseStrength = 1 / ((goalsConcededPerMatch * 1.5) + foulsPerMatch + cardsRatio + ownGoalsRatio + 1e-5)
+   defenseStrength = 1 / (goalsConcededPerMatch + foulsPerMatch + cardsRatio + ownGoalsRatio + 1e-5)
 
    return pd.Series([
       goalsConcededPerMatch,
@@ -411,7 +404,7 @@ def setPieceStrength(row, df):
    freeKicksPerMatch = stats['FK'] / stats['GP'] if stats['GP'] != 0 else 0
    penaltiesConvertedRate = stats['PK'] / stats['PKcon'] if stats['PKcon'] != 0 else 0
 
-   setPieceStrength = ((penaltiesConvertedRate * 2) + (freeKicksPerMatch * 1.5) + cornersPerMatch * 1.3)
+   setPieceStrength = (penaltiesConvertedRate + freeKicksPerMatch + cornersPerMatch)
 
    return pd.Series ([
       cornersPerMatch,
@@ -437,7 +430,7 @@ def teamPowerIndex(row, df):
    avgPointsPerGame = teamPoints / gamesPlayedByTeam
    weightPoints = (teamPoints / gamesPlayedByTeam) * seasonWeight
    
-   tpi = ((attackStats * 2) + (setPieceStats) + passingAndPositionStats - (defenseStats * 2) - (avgPositionOverall * 2) + (avgPointsPerGame * 2) + (weightPoints * 2)) * seasonWeight / seasonCounter
+   tpi = (attackStats + setPieceStats + passingAndPositionStats - defenseStats - avgPositionOverall + avgPointsPerGame + weightPoints) * seasonWeight / seasonCounter
 
    return pd.Series ([tpi,
                      avgPositionOverall,
@@ -685,9 +678,9 @@ importancesRF = rf_model_step.feature_importances_
 feature_importance_rf = pd.DataFrame({'Feature': X.columns, 'Importance RF': importancesRF})
 print(feature_importance_rf.sort_values(by='Importance RF', ascending=False))
 
-logisticRegressionTuning()
-randomForestRegressorTuning()
-randomForestClassifierTuning()
+#logisticRegressionTuning()
+#randomForestRegressorTuning()
+#randomForestClassifierTuning()
 
 
 #Visualization
