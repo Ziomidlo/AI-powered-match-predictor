@@ -17,18 +17,18 @@ predicted_matches = pd.read_csv(cleaned_data_folder + 'PredictedUpcomingMatches.
 
 def data_to_db():
     with SessionLocal() as session:
-        all_teams_in_db = session.query(Team).all()
-        all_seasons_in_db = session.query(Season).all()
-        all_matches_in_db = session.query(Match).all()
-        all_leagues_in_db = session.query(League).all()
-        all_season_stats_in_db = session.query(SeasonStats).all()
-        all_learning_features_in_db = session.query(LearningFeature).all()
-        all_predicted_matches_in_db = session.query(PredictedMatch).all()
+        all_teams_in_db = session.query(Team).count()
+        all_seasons_in_db = session.query(Season).count()
+        all_matches_in_db = session.query(Match).count()
+        all_leagues_in_db = session.query(League).count()
+        all_season_stats_in_db = session.query(SeasonStats).count()
+        all_learning_features_in_db = session.query(LearningFeature).count()
+        all_predicted_matches_in_db = session.query(PredictedMatch).count()
         
-        print(f"Numbers of team in base: {len(all_teams_in_db)}, seasons: {len(all_seasons_in_db)}, \
-              matches: {len(all_matches_in_db)}, leagues: {len(all_leagues_in_db)}, \
-              season stats: {len(all_season_stats_in_db)}, learning features: {len(all_learning_features_in_db)}, \
-                predicted matches: {len(all_predicted_matches_in_db)}")
+        print(f"Numbers of team in base: {all_teams_in_db}, seasons: {all_seasons_in_db}, \
+              matches: {all_matches_in_db}, leagues: {all_leagues_in_db}, \
+              season stats: {all_season_stats_in_db}, learning features: {all_learning_features_in_db}, \
+                predicted matches: {all_predicted_matches_in_db}")
     season_data_to_db()
     team_data_to_db()
     match_data_to_db()
@@ -261,10 +261,20 @@ def predicted_match_to_db():
                 home_win_probability_rfc = row['home_win_rfc'],
                 draw_probability_rfc = row['draw_rfc'],
                 away_win_probability_rfc = row['away_win_rfc'],
+                home_win_probability_xgb = row['home_win_xgb'],
+                draw_probability_xgb = row['draw_xgb'],
+                away_win_probability_xgb = row['away_win_xgb'],
+                home_win_probability_svc = row['home_win_svc'],
+                draw_probability_svc = row['draw_svc'],
+                away_win_probability_svc = row['away_win_svc'],
                 home_expected_goals_lr = row['home_xG_lr'],
                 away_expected_goals_lr = row['away_xG_lr'],
                 home_expected_goals_rfr = row['home_xG_rfr'],
-                away_expected_goals_rfr = row['away_xG_rfr']
+                away_expected_goals_rfr = row['away_xG_rfr'],
+                home_expected_goals_xgb = row['home_xG_xgb'],
+                away_expected_goals_xgb = row['away_xG_xgb'],
+                home_expected_goals_svr = row['home_xG_svr'],
+                away_expected_goals_svr = row['away_xG_svr']
             )
             db.add(new_predicted_match)
             added_predicted_matches += 1

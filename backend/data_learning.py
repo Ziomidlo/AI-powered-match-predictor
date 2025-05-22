@@ -1,15 +1,17 @@
+from random import randint, uniform
 from matplotlib import pyplot as plt
 import pandas as pd
 import seaborn as sns
 from scipy.stats import spearmanr, pearsonr
 from sklearn.model_selection import train_test_split, RandomizedSearchCV, TimeSeriesSplit
 from sklearn.linear_model import LogisticRegression, LinearRegression
-from sklearn.pipeline import make_pipeline
+from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_absolute_error, mean_squared_error, make_scorer
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 import scipy.stats as stats
-
+from sklearn.svm import SVC, SVR
+from xgboost import XGBClassifier, XGBRegressor
 
 def train_models():
    cleaned_data_folder = "cleaned_data/"
@@ -39,6 +41,8 @@ def train_models():
 
    tscv_tuning = TimeSeriesSplit(n_splits= 5)
 
+   X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
    #Logistic Regression tuning
    def logisticRegressionTuning():
       print("--- Tuning Logistic Regression ---")
@@ -54,7 +58,7 @@ def train_models():
       random_search_lr = RandomizedSearchCV(lr_pipeline, param_distributions_lr, n_iter=100, cv=tscv_tuning, scoring='accuracy', random_state=42,  n_jobs=-1)
 
       print("Starting Tuning Logistic Regression...")
-      random_search_lr.fit(X, y)
+      random_search_lr.fit(X_train, y_train)
 
       print("\n--- Results of Tuning  Logistic Regression ---")
       print("Best parameters:", random_search_lr.best_params_)
@@ -65,8 +69,7 @@ def train_models():
 
    #Logistic Regression 
 
-   X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-   model =  make_pipeline(StandardScaler(), LogisticRegression(penalty='l2', class_weight='balanced', solver='lbfgs', max_iter=5000, random_state=42, C=0.008))
+   model =  make_pipeline(StandardScaler(), LogisticRegression(penalty='l1', class_weight='balanced', solver='saga', max_iter=5000, random_state=42, C=1.146))
    model.fit(X_train, y_train)
 
 
@@ -93,7 +96,7 @@ def train_models():
 
       print("Startning tuning Random Forest Classifier...")
       random_search_rf_clf = RandomizedSearchCV(rf_clf_pipeline, param_distributions_rf_clf, n_iter=100, scoring="accuracy", random_state=42, n_jobs=-1)
-      random_search_rf_clf.fit(X, y)
+      random_search_rf_clf.fit(X_train, y_train)
 
       print("\n--- Results of Tuning Random Forest Classifier ---")
       print("Best parameters:", random_search_rf_clf.best_params_)
@@ -103,7 +106,18 @@ def train_models():
       print("Best model:", best_rf_clf_model)
 
    #Random Forest Classifier scores
-   rf_model = make_pipeline(StandardScaler(), RandomForestClassifier(criterion='gini', n_estimators=445, random_state=42, class_weight='balanced', max_depth=22, min_samples_leaf=4, min_samples_split=20))
+   rf_model = make_pipeline(
+      StandardScaler(), 
+      RandomForestClassifier(
+         criterion='gini', 
+         n_estimators=180, 
+         max_features=None,
+         random_state=42, 
+         class_weight='balanced', 
+         max_depth=9, 
+         min_samples_leaf=3, 
+         min_samples_split=15))
+   
    rf_model.fit(X_train, y_train)
 
    y_pred_rf = rf_model.predict(X_test)
@@ -112,6 +126,92 @@ def train_models():
    print("Classification Report:\n", classification_report(y_test, y_pred_rf))
    print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred_rf))
 
+   #XGBoost Classifier
+
+   def xgboost_classifier_tuning():
+      pipeline_xgb_classifier = make_pipeline(StandardScaler(), XGBClassifier(objective='multi:softmax', eval_metric='mlogloss',  random_state=42))
+
+      params_xgb_classifier = {
+         'xgbclassifier__n_estimators': stats.randint(50, 300),
+         'xgbclassifier__learning_rate': stats.uniform(0.01, 0.2),
+         'xgbclassifier__max_depth' : stats.randint(3, 10),
+         'xgbclassifier__subsample' : stats.uniform(0.6, 0.4),
+         'xgbclassifier__colsample_bytree' : stats.uniform(0.6, 0.4),
+         'xgbclassifier__gamma' : stats.uniform(0, 0.5),
+         'xgbclassifier__lambda' : stats.uniform(0.5, 1.5),
+         'xgbclassifier__alpha' : stats.uniform(0, 0.5)
+      }
+
+      xgb_search = RandomizedSearchCV(pipeline_xgb_classifier, params_xgb_classifier, n_iter=20, cv=tscv_tuning, scoring='accuracy', random_state=42,  n_jobs=-1, verbose=1)
+      y_xgb = y_train + 1
+      y_xgb_test = y_test + 1 
+      xgb_search.fit(X_train, y_xgb)  
+      print("\nXGBoost Classifier - Best Parameters: ", xgb_search.best_params_)
+      print("XGBoost Classifier - The best accurency CV: ", xgb_search.best_score_)
+      y_pred_xgb = xgb_search.predict(X_test)
+      print("XGBoost Classifier - Classification raport in test values:\n", classification_report(y_xgb_test, y_pred_xgb))
+   
+   pipeline_xgb_classifier = make_pipeline(
+      StandardScaler(), 
+      XGBClassifier(
+         alpha=0.176, 
+         colsample_bytree = 0.722, 
+         gamma = 0.082, 
+         learning_rate=0.107, 
+         max_depth = 3, 
+         n_estimators =100, 
+         subsample = 0.708, 
+         objective='multi:softmax', 
+         eval_metric='mlogloss', 
+         random_state=42))
+   
+   y_xgb = y_train + 1
+   y_xgb_test = y_test + 1 
+   pipeline_xgb_classifier.fit(X_train, y_xgb) 
+   y_pred_xgb = pipeline_xgb_classifier.predict(X_test) 
+   print("XGBoost Classifier - Accuracy :", accuracy_score(y_xgb_test, y_pred_xgb))
+   print("Classificaion Report:\n", classification_report(y_xgb_test, y_pred_xgb))
+   print("Confusion Matrix: ", confusion_matrix(y_xgb_test, y_pred_xgb))
+   
+   #Support Vector Machine (SVC)
+   def svc_classifier_tuning():
+      pipeline_svc_classifier = make_pipeline(StandardScaler(), SVC(random_state=42, probability=True))
+
+      params_svc_classifier = {
+         'svc__C' : stats.uniform(0.1, 10),
+         'svc__kernel' : ['linear', 'poly', 'rbf', 'sigmoid'],
+         'svc__gamma' : stats.uniform(0.001, 1),
+         'svc__degree' : stats.randint(2,4)
+      }
+
+      svc_search = RandomizedSearchCV(
+         pipeline_svc_classifier, 
+         params_svc_classifier, 
+         n_iter=20, 
+         cv=tscv_tuning,
+         scoring='accuracy',
+         random_state=42, 
+         n_jobs=-1,
+         verbose=1)
+      
+      svc_search.fit(X_train, y_train)
+      print("\nSVC Classifier - Best Parameters: ", svc_search.best_params_)
+      print("SVC CLassifier - The best average accuracy CV:", svc_search.best_score_)
+
+   pipeline_svc_classifier = make_pipeline(
+      StandardScaler(), 
+      SVC(
+         random_state= 42,
+         probability=True,
+         C=2.06,
+         degree=2,
+         gamma=0.962,
+         kernel='linear'))
+   pipeline_svc_classifier.fit(X_train, y_train)
+   y_pred_svc = pipeline_svc_classifier.predict(X_test)
+   print("\nSupport Vector Classifier - Accuracy: ", accuracy_score(y_test, y_pred_svc))
+   print("Classificaion Report:\n", classification_report(y_test, y_pred_svc))
+   print("Confusion Matrix: ", confusion_matrix(y_test, y_pred_svc))
    #Linear Regression
 
    #Target for linear reggresion
@@ -164,7 +264,7 @@ def train_models():
       random_search_rf_reg = RandomizedSearchCV(rf_reg_pipeline, param_distributions_rf_reg, n_iter=100, cv=tscv_tuning, scoring=mae_scorer, random_state=42, n_jobs=-1 )
 
       print("Tuning for Home Goals...")
-      random_search_rf_reg_home = random_search_rf_reg.fit(X, y_home_goals)
+      random_search_rf_reg_home = random_search_rf_reg.fit(X_train_home, y_train_home)
 
       print("\n--- Results of Tuning Random Forest Regressor (Home Goals) ---")
       print("Best parameters:", random_search_rf_reg_home.best_params_)
@@ -174,7 +274,7 @@ def train_models():
       print("Best model:", best_rf_reg_home_model)
 
       print("Tuning for Away Goals...")
-      random_search_rf_reg_away = random_search_rf_reg.fit(X, y_away_goals)
+      random_search_rf_reg_away = random_search_rf_reg.fit(X_train_away, y_train_away)
 
       print("\n--- Results of Tuning Random Forest Regressor (Away Goals) ---")
       print("Best parameters:", random_search_rf_reg_away.best_params_)
@@ -186,8 +286,27 @@ def train_models():
 
    #Random Forest Regressor Scores
 
-   home_goals_rf = make_pipeline(StandardScaler(), RandomForestRegressor(n_estimators=838, random_state=42, max_depth=23, max_features='log2', min_samples_leaf=27, min_samples_split=36))
-   away_goals_rf = make_pipeline(StandardScaler(), RandomForestRegressor(n_estimators=956, random_state=42, max_depth=11, max_features='log2', min_samples_leaf=29, min_samples_split=45))
+   home_goals_rf = make_pipeline(
+      StandardScaler(), 
+      RandomForestRegressor(
+      n_estimators=260,
+      criterion='absolute_error',
+      random_state=42, 
+      max_depth=None, 
+      max_features=None, 
+      min_samples_leaf=29, 
+      min_samples_split=22))
+   
+   away_goals_rf = make_pipeline(
+      StandardScaler(), 
+      RandomForestRegressor(
+         n_estimators=838, 
+         criterion='absolute_error',
+         random_state=42, 
+         max_depth=21, 
+         max_features='log2', 
+         min_samples_leaf=27, 
+         min_samples_split=36))
 
    home_goals_rf.fit(X_train_home, y_train_home)
    away_goals_rf.fit(X_train_away, y_train_away)
@@ -203,6 +322,152 @@ def train_models():
    print("MAE:", mean_absolute_error(y_test_away, y_pred_away_rf))
    print("MSE:", mean_squared_error(y_test_away, y_pred_away_rf))
 
+   #XGBoost Regressor
+   def xgboost_regressor_tuning():
+      pipeline_xgb_regressor = make_pipeline(StandardScaler(), XGBRegressor(objective='reg:squarederror', eval_metric='rmse', random_state=42))
+
+      params_xgb_regressor = {
+         'xgbregressor__n_estimators': stats.randint(50, 300),
+         'xgbregressor__learning_rate': stats.uniform(0.01, 0.2),
+         'xgbregressor__max_depth': stats.randint(3, 10),
+         'xgbregressor__subsample': stats.uniform(0.7, 0.9)
+      }
+
+      xgb_regressor_search_home = RandomizedSearchCV(
+         pipeline_xgb_regressor,
+           params_xgb_regressor, 
+           cv=tscv_tuning, 
+           scoring='neg_mean_absolute_error', 
+           random_state=42, 
+           n_jobs=-1, 
+           verbose=1)
+      xgb_regressor_search_home.fit(X_train_home, y_train_away)
+      print("\nXGBoost Regressor (Home Goals) - Best Parameters", xgb_regressor_search_home.best_params_)
+      print("XGBoost Regressor (Home Goals) - The Best average MAE CV: ", -xgb_regressor_search_home.best_score_)
+
+      xgb_regressor_search_away = RandomizedSearchCV(
+         pipeline_xgb_regressor, 
+         params_xgb_regressor, 
+         cv=tscv_tuning, 
+         scoring='neg_mean_absolute_error', 
+         random_state=42, 
+         n_jobs=-1, 
+         verbose=1)
+      
+      xgb_regressor_search_away.fit(X_train_home, y_train_home)
+      print("\nXGBoost Regressor (Away Goals) - Best Parameters", xgb_regressor_search_away.best_params_)
+      print("XGBoost Regressor (Away Goals) - The Best average MAE CV: ", -xgb_regressor_search_away.best_score_)
+
+   home_goals_xgb = make_pipeline(
+      StandardScaler(),
+      XGBRegressor(
+         learning_rate = 0.216,
+         max_depth = 7,
+         n_estimators = 149,
+         subsample = 0.8286
+      )
+   )
+
+   away_goals_xgb = make_pipeline(
+      StandardScaler(),
+      XGBRegressor(
+         learning_rate = 0.216,
+         max_depth = 7,
+         n_estimators = 149,
+         subsample = 0.8286
+      )
+   )
+   home_goals_xgb.fit(X_train_home, y_train_home)
+   away_goals_xgb.fit(X_train_away, y_train_away)
+
+   y_pred_home_xgb = home_goals_rf.predict(X_test_home)
+   y_pred_away_xgb = away_goals_rf.predict(X_test_away)
+
+   print("XGBoost Regressor - Home Goals Prediction:")
+   print("MAE:", mean_absolute_error(y_test_home, y_pred_home_xgb))
+   print("MSE:", mean_squared_error(y_test_home, y_pred_home_xgb))
+
+   print("\nXGBoost Regressor - Away Goals Prediction:")
+   print("MAE:", mean_absolute_error(y_test_away, y_pred_away_xgb))
+   print("MSE:", mean_squared_error(y_test_away, y_pred_away_xgb))
+
+   #Support Vector Regressor (SVR)
+
+   def svr_regressor_tuning():
+
+      pipeline_svr_regressor = make_pipeline(
+         StandardScaler(), 
+         SVR() 
+      )
+      params_svr_regressor = {
+         'svr__C': stats.uniform(0.1, 10),
+         'svr__epsilon' : stats.uniform(0.01, 0.5),
+         'svr__kernel' : ['linear', 'rbf'],
+         'svr__gamma' : ['scale', 'auto']
+      }
+
+      mae_scorer = make_scorer(mean_absolute_error, greater_is_better=False)
+
+      svr_search_home = RandomizedSearchCV(
+         pipeline_svr_regressor,
+         params_svr_regressor,
+         n_iter=20, 
+         cv=tscv_tuning,
+         scoring=mae_scorer, 
+         random_state=42,
+         n_jobs=-1,
+         verbose=1
+      )
+      svr_search_home.fit(X_train_home, y_train_home)
+      print("\nSVR Regressor (Home Goals) - Best Parameters: ", svr_search_home.best_params_)
+      print("SVR Regressor (Home Goals) - Best average MAE CV: ", -svr_search_home.best_score_)
+
+      svr_search_away = RandomizedSearchCV(
+         pipeline_svr_regressor,
+         params_svr_regressor,
+         n_iter=20, 
+         cv=tscv_tuning,
+         scoring=mae_scorer, 
+         random_state=42,
+         n_jobs=-1,
+         verbose=1
+      )
+      svr_search_away.fit(X_train_away, y_train_away)
+      print("\nSVR Regressor (Away Goals) - Best Parameters: ", svr_search_away.best_params_)
+      print("SVR Regressor (Away Goals) - Best average MAE CV: ", -svr_search_away.best_score_)
+
+   home_goals_svr = make_pipeline(
+      StandardScaler(),
+      SVR(
+         C=1.495,
+         epsilon=0.156,
+         gamma='auto',
+         kernel='linear'
+      ))
+   
+   away_goals_svr = make_pipeline(
+      StandardScaler(),
+      SVR(
+         C=5.243,
+         epsilon=0.306,
+         gamma='scale',
+         kernel='linear'
+      )
+   )
+   
+   home_goals_svr.fit(X_train_home, y_train_home)
+   away_goals_svr.fit(X_train_away, y_train_away)
+
+   y_pred_home_svr = home_goals_svr.predict(X_test_home)
+   y_pred_away_svr = away_goals_svr.predict(X_test_away)
+
+   print("Support Vector Regressor - Home Goals Prediction:")
+   print("MAE:", mean_absolute_error(y_test_home, y_pred_home_svr))
+   print("MSE:", mean_squared_error(y_test_home, y_pred_home_svr))
+
+   print("\nSupport Vector Regressor - Away Goals Prediction:")
+   print("MAE:", mean_absolute_error(y_test_away, y_pred_away_svr))
+   print("MSE:", mean_squared_error(y_test_away, y_pred_away_svr))
 
    importances = model.named_steps['logisticregression'].coef_[0]
    feature_importance_df = pd.DataFrame({'Feature': X.columns, 'Importance': importances})
@@ -217,17 +482,29 @@ def train_models():
    #logisticRegressionTuning()
    #randomForestRegressorTuning()
    #randomForestClassifierTuning()
+   #xgboost_classifier_tuning()
+   #xgboost_regressor_tuning()
+   #svc_classifier_tuning()
+   #svr_regressor_tuning()
 
    #Upcoming matches prediction
 
    probs_lr = model.predict_proba(XUP)
    probs_rfc = rf_model.predict_proba(XUP)
+   probs_xgb = pipeline_xgb_classifier.predict_proba(XUP)
+   probs_svc = pipeline_svc_classifier.predict_proba(XUP)
 
    home_xg = home_goals_model.predict(XUP)
    away_xg = away_goals_model.predict(XUP)
 
    home_xg_rf = home_goals_rf.predict(XUP)
    away_xg_rf = away_goals_rf.predict(XUP)
+
+   home_xg_xgb = home_goals_xgb.predict(XUP)
+   away_xg_xgb = away_goals_xgb.predict(XUP)
+
+   home_xg_svr = home_goals_svr.predict(XUP)
+   away_xg_svr = away_goals_svr.predict(XUP)
 
    predicted_matches_df = pd.DataFrame({
       'Home Id' : upcoming_matches['Home Id'],
@@ -240,11 +517,20 @@ def train_models():
       "home_win_rfc" : (probs_rfc[:, 2] * 100).round(2),
       "draw_rfc" : (probs_rfc[:, 1] * 100).round(2),
       "away_win_rfc" : (probs_rfc[:, 0] * 100).round(2),
+      "home_win_xgb" : (probs_xgb[:, 2] * 100).round(2),
+      "draw_xgb" : (probs_xgb[:, 1] * 100).round(2),
+      "away_win_xgb" : (probs_xgb[:, 0] * 100).round(2),
+      "home_win_svc" : (probs_svc[:, 2] * 100).round(2),
+      "draw_svc" : (probs_svc[:, 1] * 100).round(2),
+      "away_win_svc" : (probs_svc[:, 0] * 100).round(2),
       "home_xG_lr" : home_xg.round(2),
       "away_xG_lr" : away_xg.round(2),
       "home_xG_rfr": home_xg_rf.round(2),
-      "away_xG_rfr" : away_xg_rf.round(2)
-
+      "away_xG_rfr" : away_xg_rf.round(2),
+      "home_xG_xgb" : home_xg_xgb.round(2),
+      "away_xG_xgb" : away_xg_xgb.round(2),
+      "home_xG_svr" : home_xg_svr.round(2),
+      "away_xG_svr" : away_xg_svr.round(2)
    })
 
    predicted_matches_df.to_csv(cleaned_data_folder + "PredictedUpcomingMatches.csv", index=False)
