@@ -27,6 +27,7 @@ class Match(Base):
     match_date = Column(String)
     home_team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
     away_team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    result_numeric = Column(Integer)
     home_goals = Column(Integer)
     away_goals = Column(Integer)
     home_xG = Column(Float)
@@ -72,7 +73,7 @@ class SeasonStats(Base):
     yellow_cards = Column(Float)
     red_cards = Column(Float)
     fouls_conceded = Column(Float)
-    penalites_conceded = Column(Float)
+    penalties_conceded = Column(Float)
     own_goals = Column(Float)
 
     team = relationship("Team", foreign_keys=[team_id])

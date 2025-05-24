@@ -13,7 +13,19 @@ import scipy.stats as stats
 from sklearn.svm import SVC, SVR
 from xgboost import XGBClassifier, XGBRegressor
 
+trained_ml_models = {}
+
+TRAINING_FEATURE_COLUMNS= ['home_xG_avg', 'away_xG_avg','goal_diff_delta', 'home_team_strength', 'away_team_strength', 
+                     'h2h_home_wins', 'h2h_away_wins', 'h2h_draws', 'h2h_home_goals', 'h2h_away_goals', 
+                     'venue_home_wins','venue_away_wins', 'venue_draws', 'venue_avg_home_goals', 'venue_avg_away_goals',
+                     'home_defense_strength', 'away_defense_strength', 'home_offensive_strength', 'away_offensive_strength', 'home_passing_and_control_strength', 
+                     'away_passing_and_control_strength', 'home_team_power_index', 'away_team_power_index', 'home_avg_points_per_game', 'away_avg_points_per_game',
+                     'home_avg_position_ovr', 'away_avg_position_ovr']
+
 def train_models():
+   
+   global trained_ml_models
+
    cleaned_data_folder = "cleaned_data/"
    visualization_folder = "visualizations/"
    merged_matches = pd.read_csv(cleaned_data_folder + "LearningMatchesData.csv")
@@ -30,10 +42,10 @@ def train_models():
 
    X = merged_matches[['home_xG_avg', 'away_xG_avg','goal_diff_delta', 'home_team_strength', 'away_team_strength', 
                      'h2h_home_wins', 'h2h_away_wins', 'h2h_draws', 'h2h_home_goals', 'h2h_away_goals', 
-                     'venue_home_wins','venue_away_wins', 'venue_draws', 'venue_avg_home_goals', 'venue_avg_away_goals', 'venue_impact_diff',
+                     'venue_home_wins','venue_away_wins', 'venue_draws', 'venue_avg_home_goals', 'venue_avg_away_goals',
                      'home_defense_strength', 'away_defense_strength', 'home_offensive_strength', 'away_offensive_strength', 'home_passing_and_control_strength', 
                      'away_passing_and_control_strength', 'home_team_power_index', 'away_team_power_index', 'home_avg_points_per_game', 'away_avg_points_per_game',
-                     'home_avg_position_ovr', 'away_avg_position_ovr', 'home_weight_points', 'away_weight_points']]
+                     'home_avg_position_ovr', 'away_avg_position_ovr']]
 
    XUP = upcoming_matches[X.columns]
 
@@ -78,6 +90,7 @@ def train_models():
    print("Classification Report: ", classification_report(y_test, y_pred))
    print("Confusion Matrix: ", confusion_matrix(y_test, y_pred))
 
+   trained_ml_models['logistic_regression_classifier'] = model
 
    #Random Forest Classifier Tuning
    def randomForestClassifierTuning():
@@ -126,6 +139,8 @@ def train_models():
    print("Classification Report:\n", classification_report(y_test, y_pred_rf))
    print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred_rf))
 
+   trained_ml_models['random_forest_classifier'] = rf_model
+
    #XGBoost Classifier
 
    def xgboost_classifier_tuning():
@@ -172,6 +187,8 @@ def train_models():
    print("XGBoost Classifier - Accuracy :", accuracy_score(y_xgb_test, y_pred_xgb))
    print("Classificaion Report:\n", classification_report(y_xgb_test, y_pred_xgb))
    print("Confusion Matrix: ", confusion_matrix(y_xgb_test, y_pred_xgb))
+
+   trained_ml_models['xgboost_classifier'] = pipeline_xgb_classifier
    
    #Support Vector Machine (SVC)
    def svc_classifier_tuning():
@@ -212,6 +229,9 @@ def train_models():
    print("\nSupport Vector Classifier - Accuracy: ", accuracy_score(y_test, y_pred_svc))
    print("Classificaion Report:\n", classification_report(y_test, y_pred_svc))
    print("Confusion Matrix: ", confusion_matrix(y_test, y_pred_svc))
+
+   trained_ml_models['support_vector_classifier'] = pipeline_svc_classifier
+
    #Linear Regression
 
    #Target for linear reggresion
@@ -240,6 +260,9 @@ def train_models():
    print("\nLinear Regression - Away Goals Prediction:")
    print("MAE:", mean_absolute_error(y_test_away, y_pred_away))
    print("MSE:", mean_squared_error(y_test_away, y_pred_away))
+
+   trained_ml_models['linear_reggresor_home'] = home_goals_model
+   trained_ml_models['linear_reggresor_away'] = away_goals_model
 
 
    #Random Forest Regressor Tuning
@@ -322,6 +345,9 @@ def train_models():
    print("MAE:", mean_absolute_error(y_test_away, y_pred_away_rf))
    print("MSE:", mean_squared_error(y_test_away, y_pred_away_rf))
 
+   trained_ml_models['random_forest_regressor_home'] = home_goals_rf
+   trained_ml_models['random_forest_regressor_away'] = away_goals_rf
+
    #XGBoost Regressor
    def xgboost_regressor_tuning():
       pipeline_xgb_regressor = make_pipeline(StandardScaler(), XGBRegressor(objective='reg:squarederror', eval_metric='rmse', random_state=42))
@@ -390,6 +416,9 @@ def train_models():
    print("\nXGBoost Regressor - Away Goals Prediction:")
    print("MAE:", mean_absolute_error(y_test_away, y_pred_away_xgb))
    print("MSE:", mean_squared_error(y_test_away, y_pred_away_xgb))
+
+   trained_ml_models['xgboost_regressor_home'] = home_goals_xgb
+   trained_ml_models['xgboost_regressor_away'] = away_goals_xgb
 
    #Support Vector Regressor (SVR)
 
@@ -468,6 +497,10 @@ def train_models():
    print("\nSupport Vector Regressor - Away Goals Prediction:")
    print("MAE:", mean_absolute_error(y_test_away, y_pred_away_svr))
    print("MSE:", mean_squared_error(y_test_away, y_pred_away_svr))
+
+   trained_ml_models['support_vector_regressor_home'] = home_goals_svr
+   trained_ml_models['support_vector_regressor_away'] = away_goals_svr
+
 
    importances = model.named_steps['logisticregression'].coef_[0]
    feature_importance_df = pd.DataFrame({'Feature': X.columns, 'Importance': importances})

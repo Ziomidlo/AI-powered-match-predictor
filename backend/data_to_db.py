@@ -103,10 +103,11 @@ def match_data_to_db():
             match_date=row['Date'],
             home_team_id=home_team_id,
             away_team_id=away_team_id,
+            result_numeric = row['result_numeric'],
             home_goals=row['Home Goals'],
             away_goals=row['Away Goals'],
-            home_xG=row.get('home_xG', None), 
-            away_xG=row.get('away_xG', None)
+            home_xG=row.get('xG', None), 
+            away_xG=row.get('xG.1', None)
         )
             db.add(new_match)
             added_matches += 1
@@ -188,7 +189,7 @@ def season_stats_to_db():
                 yellow_cards = row['CrdY'],
                 red_cards = row['CrdR'],
                 fouls_conceded = row['Fls'],
-                penalites_conceded = row['PKcon'],
+                penalties_conceded = row['PKcon'],
                 own_goals = row['OG']
             )
             db.add(new_season_stats)
