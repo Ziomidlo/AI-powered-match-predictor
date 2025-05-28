@@ -2,7 +2,7 @@ from typing import Any, Dict, Optional
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 from models import League, LearningFeature, Match, PredictedMatch, SeasonStats, Team
-from schemas import PredictedMatchCreate
+from schemas import PredictedMatchCreate, PredictedMatchPredictionResult
 
 def get_team(db: Session, team_id: int):
     return db.query(Team).filter(Team.id == team_id).first()
@@ -42,7 +42,6 @@ def get_average_learning_features_for_team(db: Session, team_id: int) -> Optiona
         func.avg(LearningFeature.offensive_strength).label("avg_offensive_strength"),
         func.avg(LearningFeature.goals_conceded_per_match).label("avg_goals_conceded_per_match"),
         func.avg(LearningFeature.defense_strength).label("avg_defense_strength"),
-        # Poprawiona literówka: effective_possession
         func.avg(LearningFeature.effective_possession).label("avg_effective_possession"),
         func.avg(LearningFeature.passing_and_control_strength).label("avg_passing_and_control_strength"),
         func.avg(LearningFeature.penalties_converted_rate).label("avg_penalties_converted_rate"),
@@ -54,8 +53,6 @@ def get_average_learning_features_for_team(db: Session, team_id: int) -> Optiona
 
     if avg_query_result and any(value is not None for value in avg_query_result):
         avg_features_dict = {
-            # Używamy ._asdict(), jeśli wynik jest NamedTuple/Row, lub bezpośrednio indeksujemy
-            # Dla bezpieczeństwa, odwołajmy się przez labele (jeśli .first() zwróci obiekt RowProxy)
             "goals_per_match": avg_query_result.avg_goals_per_match,
             "offensive_strength": avg_query_result.avg_offensive_strength,
             "goals_conceded_per_match": avg_query_result.avg_goals_conceded_per_match,
@@ -78,8 +75,12 @@ def get_predicted_matches(db: Session, skip: int = 0):
     return db.query(PredictedMatch).offset(skip).all()
 
 def get_recent_matches(db: Session, team_id: int, limit: int):
-    return db.query(Match).filter((Match.home_team==team_id) | (Match.away_team_id == team_id))\
-        .order_by(Match.match_date.desc()).limit(limit).all()
+    return db.query(Match).filter(
+        or_(
+            Match.home_team_id == team_id,
+            Match.away_team_id == team_id
+        )
+    ).order_by(Match.match_date.desc()).limit(limit).all()
 
 def get_h2h_matches(db: Session, team1_id: int, team2_id: int):
     return db.query(Match).filter(
@@ -103,7 +104,7 @@ def get_average_home_xg_for_team(
     query = db.query(func.avg(Match.home_xG))\
               .filter(Match.home_team_id == team_id)
         
-    average_xg = query.scalar_one_or_none()
+    average_xg = query.scalar()
     return average_xg
 
 def get_average_away_xg_for_team(
@@ -113,10 +114,25 @@ def get_average_away_xg_for_team(
     query = db.query(func.avg(Match.away_xG))\
               .filter(Match.away_team_id == team_id)
 
-    average_xg = query.scalar_one_or_none()
+    average_xg = query.scalar()
     return average_xg
 
-def create_predicted_match(db: Session, prediction: PredictedMatchCreate) -> PredictedMatch:
+def create_empty_prediction_match(
+    db: Session, 
+    home_id: int, 
+    away_id:int
+) -> PredictedMatch:
+    prediction = PredictedMatch(
+        home_team_id = home_id,
+        away_team_id = away_id,
+        is_predicted = False
+    )
+    db.add(prediction)
+    db.commit()
+    db.refresh(prediction)
+    return prediction
+
+def save_predicted_match_result(db: Session, prediction: PredictedMatchPredictionResult) -> PredictedMatch:
     db_predicted_match = PredictedMatch(
         home_team_id=prediction.home_team_id,
         away_team_id=prediction.away_team_id,
@@ -149,4 +165,10 @@ def create_predicted_match(db: Session, prediction: PredictedMatchCreate) -> Pre
     db.commit()
     db.refresh(db_predicted_match)
     return db_predicted_match
+
+def delete_predicted_match(db: Session, prediction_id: int):
+    prediction = db.query(PredictedMatch).filter(PredictedMatch.id == prediction_id).first()
+    if prediction:
+        db.delete(prediction)
+        db.commit()
 

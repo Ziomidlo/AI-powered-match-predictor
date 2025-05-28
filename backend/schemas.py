@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel, Field
 
 class SeasonBase(BaseModel):
@@ -63,26 +64,26 @@ class LearningFeatureBase(BaseModel):
 
 class PredictedMatchBase(BaseModel):
     is_predicted: bool = Field(description="Declaration if match has been already predicted")
-    home_win_probability_lr: float = Field(description="Home win probability by logistic regresion")
-    draw_probability_lr: float = Field(description="Draw probability by logistic regresion")
-    away_win_probability_lr: float = Field(description="Away win probability by logistic regresion")
-    home_win_probability_rfc: float = Field(description="Home win probability by random forrest classifier")
-    draw_probability_rfc: float = Field(description="Draw probability by random forrest classifier")
-    away_win_probability_rfc: float = Field(description="Away win probability by random forrest classifier")
-    home_win_probability_xgb: float = Field(description="Home win probability by XGBoost classifier")
-    draw_probability_xgb: float = Field(description="Draw probability by XGBoost classifier")
-    away_win_probability_xgb: float = Field(description="Away win probability by XGBoost classifier")
-    home_win_probability_svc: float = Field(description="Home win probability by Support Vector Classifier")
-    draw_probability_svc: float = Field(description="Draw probability by Support Vector Classifier")
-    away_win_probability_svc: float = Field(description="Away win probability by Support Vector Classifier")
-    home_expected_goals_lr: float = Field(description="Home expected goals by linear regresion")
-    away_expected_goals_lr: float = Field(description="Away expected goals by linear regresion")
-    home_expected_goals_rfr: float = Field(description="Home expected goals by random forrest regresion")
-    away_expected_goals_rfr: float = Field(description="Away expected goals by random forrest regresion")
-    home_expected_goals_xgb: float = Field(description="Home expected goals by XGBoost regressor")
-    away_expected_goals_xgb: float = Field(description="Away expected goals by XGBoost regressor")
-    home_expected_goals_svr: float = Field(description="Home expected goals by Support Vector regressor")
-    away_expected_goals_svr: float = Field(description="Away expected goals by Support Vector regressor")
+    home_win_probability_lr: Optional[float] = Field(description="Home win probability by logistic regresion")
+    draw_probability_lr: Optional[float] = Field(description="Draw probability by logistic regresion")
+    away_win_probability_lr: Optional[float] = Field(description="Away win probability by logistic regresion")
+    home_win_probability_rfc: Optional[float] = Field(description="Home win probability by random forrest classifier")
+    draw_probability_rfc: Optional[float] = Field(description="Draw probability by random forrest classifier")
+    away_win_probability_rfc: Optional[float] = Field(description="Away win probability by random forrest classifier")
+    home_win_probability_xgb: Optional[float] = Field(description="Home win probability by XGBoost classifier")
+    draw_probability_xgb: Optional[float] = Field(description="Draw probability by XGBoost classifier")
+    away_win_probability_xgb: Optional[float] = Field(description="Away win probability by XGBoost classifier")
+    home_win_probability_svc: Optional[float] = Field(description="Home win probability by Support Vector Classifier")
+    draw_probability_svc: Optional[float] = Field(description="Draw probability by Support Vector Classifier")
+    away_win_probability_svc: Optional[float] = Field(description="Away win probability by Support Vector Classifier")
+    home_expected_goals_lr: Optional[float] = Field(description="Home expected goals by linear regresion")
+    away_expected_goals_lr: Optional[float] = Field(description="Away expected goals by linear regresion")
+    home_expected_goals_rfr: Optional[float] = Field(description="Home expected goals by random forrest regresion")
+    away_expected_goals_rfr: Optional[float] = Field(description="Away expected goals by random forrest regresion")
+    home_expected_goals_xgb: Optional[float] = Field(description="Home expected goals by XGBoost regressor")
+    away_expected_goals_xgb: Optional[float] = Field(description="Away expected goals by XGBoost regressor")
+    home_expected_goals_svr: Optional[float] = Field(description="Home expected goals by Support Vector regressor")
+    away_expected_goals_svr: Optional[float] = Field(description="Away expected goals by Support Vector regressor")
     model_config = {"from_attributes" : True }
 
 
@@ -141,30 +142,69 @@ class MatchPredictionRequest(BaseModel):
     home_team_id: int
     away_team_id: int
 
-class PredictedMatchCreate(PredictedMatchBase): 
+class PredictedMatchCreate(BaseModel): 
     home_team_id: int
     away_team_id: int
 
-    is_predicted: bool = False
 
-    home_win_lr: float
-    draw_lr: float
-    away_win_lr: float
-    home_win_rfc: float
-    draw_rfc: float
-    away_win_rfc: float
-    home_win_xgb: float
-    draw_xgb: float
-    away_win_xgb: float
-    home_win_svc: float
-    draw_svc: float
-    away_win_svc: float
 
-    home_xg_lr: float
-    away_xg_lr: float
-    home_xg_rfr: float
-    away_xg_rfr: float
-    home_xg_xgb: float
-    away_xg_xgb: float
-    home_xg_svr: float
-    away_xg_svr: float
+class PredictedMatchOut(BaseModel):
+    id: int
+    home_team_id: int
+    away_team_id: int
+    is_predicted: bool
+
+    home_win_probability_lr: Optional[float]
+    draw_probability_lr: Optional[float]
+    away_win_probability_lr: Optional[float]
+
+    home_win_probability_rfc: Optional[float]
+    draw_probability_rfc: Optional[float]
+    away_win_probability_rfc: Optional[float]
+
+    home_win_probability_xgb: Optional[float]
+    draw_probability_xgb: Optional[float]
+    away_win_probability_xgb: Optional[float]
+
+    home_win_probability_svc: Optional[float]
+    draw_probability_svc: Optional[float]
+    away_win_probability_svc: Optional[float]
+
+
+    home_expected_goals_lr: Optional[float]
+    away_expected_goals_lr: Optional[float]
+    home_expected_goals_rfr: Optional[float]
+    away_expected_goals_rfr: Optional[float]
+    home_expected_goals_xgb: Optional[float]
+    away_expected_goals_xgb: Optional[float]
+    home_expected_goals_svr: Optional[float]
+    away_expected_goals_svr: Optional[float]
+
+    model_config = {"from_attributes" : True }
+
+class PredictedMatchPredictionResult(PredictedMatchCreate):
+    is_predicted: bool
+
+    home_win_probability_lr: float
+    draw_probability_lr: float
+    away_win_probability_lr: float
+    home_win_probability_rfc: float
+    draw_probability_rfc: float
+    away_win_probability_rfc: float
+    home_win_probability_xgb: float
+    draw_probability_xgb: float
+    away_win_probability_xgb: float
+    home_win_probability_svc: float
+    draw_probability_svc: float
+    away_win_probability_svc: float
+
+    home_expected_goals_lr: float
+    away_expected_goals_lr: float
+    home_expected_goals_rfr: float
+    away_expected_goals_rfr: float
+    home_expected_goals_xgb: float
+    away_expected_goals_xgb: float
+    home_expected_goals_svr: float
+    away_expected_goals_svr: float
+
+    model_config = {"from_attributes" : True }

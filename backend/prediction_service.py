@@ -1,14 +1,14 @@
 from typing import Tuple
+from fastapi import HTTPException
 from sklearn.pipeline import Pipeline
 from sqlalchemy.orm import Session
 import pandas as pd
-from . import crud
-from . import schemas
-from . import models
+from crud import get_recent_matches, get_h2h_matches, get_home_matches, get_average_home_xg_for_team, get_average_away_xg_for_team, get_average_learning_features_for_team, get_team
+from models import Team, PredictedMatch as PredictedMatchDB
 from data_learning import trained_ml_models, TRAINING_FEATURE_COLUMNS
 
 def calculate_form_db(db: Session, team_id: int) -> float:
-    past_matches_orms = crud.get_recent_matches(
+    past_matches_orms = get_recent_matches(
         db, team_id=team_id, limit=5
     )
 
@@ -35,7 +35,7 @@ def calculate_form_db(db: Session, team_id: int) -> float:
     return round(percentage_of_points, 2)
 
 def calculate_goal_difference_db(db: Session, team_id: int) -> int:
-    past_matches_orms = crud.get_recent_matches(
+    past_matches_orms = get_recent_matches(
         db, team_id=team_id, limit=5
     )
 
@@ -52,7 +52,7 @@ def calculate_goal_difference_db(db: Session, team_id: int) -> int:
     return goal_difference
 
 def head_to_head_results_db(db: Session, home_team_id: int, away_team_id: int) -> Tuple[int, int, int, int, int]:
-    h2h_matches_orms = crud.get_h2h_matches(db, team1_id=home_team_id, team2_id=away_team_id)
+    h2h_matches_orms = get_h2h_matches(db, team1_id=home_team_id, team2_id=away_team_id)
 
     home_team_h2h_wins = 0
     away_team_h2h_wins = 0
@@ -86,7 +86,7 @@ def calculate_venue_impact_db(
         db: Session,
         home_team_id: int,
 ) -> Tuple[float, float, float, float, float]:
-    home_venue_matches_orms = crud.get_home_matches(
+    home_venue_matches_orms = get_home_matches(
         db, home_team_id=home_team_id
     )
 
@@ -122,26 +122,26 @@ def calculate_avg_home_xg_db(
     db: Session, 
     team_id: int, 
 ) -> float:
-    avg_xg = crud.get_average_home_xg_for_team(db, team_id=team_id)
+    avg_xg = get_average_home_xg_for_team(db, team_id=team_id)
     return round(avg_xg, 2) if avg_xg is not None else 0.0
 
 def calculate_avg_away_xg_db(
     db: Session, 
     team_id: int, 
 ) -> float:
-    avg_xg = crud.get_average_away_xg_for_team(db, team_id=team_id)
+    avg_xg = get_average_away_xg_for_team(db, team_id=team_id)
     return round(avg_xg, 2) if avg_xg is not None else 0.0
 
 
 def generate_features_for_hypothetical_match(
         db: Session,
-        home_team: models.Team,
-        away_team: models.Team
+        home_team: Team,
+        away_team: Team
 ) -> dict:
     features = {}
 
-    home_lf_record = crud.get_average_learning_features_for_team(db, team_id=home_team.id)
-    away_lf_record = crud.get_average_learning_features_for_team(db, team_id=away_team.id)
+    home_lf_record = get_average_learning_features_for_team(db, team_id=home_team.id)
+    away_lf_record = get_average_learning_features_for_team(db, team_id=away_team.id)
 
     features['home_xG_avg'] = calculate_avg_home_xg_db(db, team_id=home_team.id)
     features['away_xG_avg'] = calculate_avg_away_xg_db(db, team_id=away_team.id)
@@ -198,17 +198,18 @@ def generate_features_for_hypothetical_match(
 
 def generate_and_store_match_prediction(
     db: Session,
-    home_team_id: int,
-    away_team_id: int
-) -> models.PredictedMatch:
+    match_id: int
+) -> PredictedMatchDB:
+    
+    match = db.query(PredictedMatchDB).filter(PredictedMatchDB.id == match_id).first()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    if match.is_predicted:
+        raise HTTPException(status_code=400, detail="Match already predicted")
 
-    home_team_orm = crud.get_team(db, team_id=home_team_id)
-    away_team_orm = crud.get_team(db, team_id=away_team_id)
 
-    if not home_team_orm:
-        raise ValueError(f"Home team with ID {home_team_id} has been not found.")
-    if not away_team_orm:
-        raise ValueError(f"Away team with ID {away_team_id} has been not found.")
+    home_team_orm = get_team(db, team_id=match.home_team_id)
+    away_team_orm = get_team(db, team_id=match.away_team_id)
 
     feature_dict = generate_features_for_hypothetical_match(db, home_team_orm, away_team_orm)
 
@@ -241,6 +242,8 @@ def generate_and_store_match_prediction(
         sample_classifier_key = 'support_vector_classifier' 
         if sample_classifier_key not in trained_ml_models:
              raise RuntimeError(f"Lack of crucial model '{sample_classifier_key}' to set an order of classes.")
+        #model = trained_ml_models[sample_classifier_key]
+        #print("Pipeline steps (if pipeline):", getattr(model, "named_steps", "Not a pipeline"))
 
         model_classes = trained_ml_models[sample_classifier_key].named_steps['model'].classes_ if isinstance(trained_ml_models[sample_classifier_key], Pipeline) else trained_ml_models[sample_classifier_key].classes_
         
@@ -263,8 +266,13 @@ def generate_and_store_match_prediction(
         away_xg_rfr_raw = trained_ml_models['random_forest_regressor_away'].predict(X_to_predict_df)[0]
         home_xg_xgb_raw = trained_ml_models['xgboost_regressor_home'].predict(X_to_predict_df)[0]
         away_xg_xgb_raw = trained_ml_models['xgboost_regressor_away'].predict(X_to_predict_df)[0]
-        home_xg_svr_raw = trained_ml_models['svr_regressor_home'].predict(X_to_predict_df)[0]
-        away_xg_svr_raw = trained_ml_models['svr_regressor_away'].predict(X_to_predict_df)[0]
+        home_xg_svr_raw = trained_ml_models['support_vector_regressor_home'].predict(X_to_predict_df)[0]
+        away_xg_svr_raw = trained_ml_models['support_vector_regressor_away'].predict(X_to_predict_df)[0]
+
+
+        print("Prediction input vector:", X_to_predict_df)
+        
+        print("TEST:" , probs_lr_raw, probs_rfc_raw,  home_xg_lr_raw, away_xg_lr_raw)
 
     except KeyError as e:
         print(f"Critical Error: Missing model w `trained_ml_models`: {e}")
@@ -273,36 +281,34 @@ def generate_and_store_match_prediction(
         print(f"Critical Error during model prediction: {e}")
         raise RuntimeError(f"Critical Error during model prediction: {e}")
 
-    prediction_create_data = schemas.PredictedMatchCreate(
-        home_team_id=home_team_id,
-        away_team_id=away_team_id,
-        is_predicted=True,
+    match.is_predicted=True
 
-        home_win_lr=round(probs_lr_raw[idx_home_win] * 100, 2),
-        draw_lr=round(probs_lr_raw[idx_draw] * 100, 2),
-        away_win_lr=round(probs_lr_raw[idx_away_win] * 100, 2),
+    match.home_win_probability_lr=round(probs_lr_raw[idx_home_win] * 100, 2)
+    match.draw_probability_lr=round(probs_lr_raw[idx_draw] * 100, 2)
+    match.away_win_probability_lr=round(probs_lr_raw[idx_away_win] * 100, 2)
         
-        home_win_rfc=round(probs_rfc_raw[idx_home_win] * 100, 2),
-        draw_rfc=round(probs_rfc_raw[idx_draw] * 100, 2),
-        away_win_rfc=round(probs_rfc_raw[idx_away_win] * 100, 2),
+    match.home_win_probability_rfc=round(probs_rfc_raw[idx_home_win] * 100, 2)
+    match.draw_probability_rfc=round(probs_rfc_raw[idx_draw] * 100, 2)
+    match.away_win_probability_rfc=round(probs_rfc_raw[idx_away_win] * 100, 2)
 
-        home_win_xgb=round(probs_xgb_raw[idx_home_win] * 100, 2),
-        draw_xgb=round(probs_xgb_raw[idx_draw] * 100, 2),
-        away_win_xgb=round(probs_xgb_raw[idx_away_win] * 100, 2),
+    match.home_win_probability_xgb=round(probs_xgb_raw[idx_home_win] * 100, 2)
+    match.draw_probability_xgb=round(probs_xgb_raw[idx_draw] * 100, 2)
+    match.away_win_probability_xgb=round(probs_xgb_raw[idx_away_win] * 100, 2)
 
-        home_win_svc=round(probs_svc_raw[idx_home_win] * 100, 2),
-        draw_svc=round(probs_svc_raw[idx_draw] * 100, 2),
-        away_win_svc=round(probs_svc_raw[idx_away_win] * 100, 2),
+    match.home_win_probability_svc=round(probs_svc_raw[idx_home_win] * 100, 2)
+    match.draw_probability_svc=round(probs_svc_raw[idx_draw] * 100, 2)
+    match.away_win_probability_svc=round(probs_svc_raw[idx_away_win] * 100, 2)
 
-        home_xg_lr=round(float(home_xg_lr_raw), 2),
-        away_xg_lr=round(float(away_xg_lr_raw), 2),
-        home_xg_rfr=round(float(home_xg_rfr_raw), 2),
-        away_xg_rfr=round(float(away_xg_rfr_raw), 2),
-        home_xg_xgb=round(float(home_xg_xgb_raw), 2),
-        away_xg_xgb=round(float(away_xg_xgb_raw), 2),
-        home_xg_svr=round(float(home_xg_svr_raw), 2),
-        away_xg_svr=round(float(away_xg_svr_raw), 2)
-    )
+    match.home_expected_goals_lr=round(float(home_xg_lr_raw), 2)
+    match.away_expected_goals_lr=round(float(away_xg_lr_raw), 2)
+    match.home_expected_goals_rfr=round(float(home_xg_rfr_raw), 2)
+    match.away_expected_goals_rfr=round(float(away_xg_rfr_raw), 2)
+    match.home_expected_goals_xgb=round(float(home_xg_xgb_raw), 2)
+    match.away_expected_goals_xgb=round(float(away_xg_xgb_raw), 2)
+    match.home_expected_goals_svr=round(float(home_xg_svr_raw), 2)
+    match.away_expected_goals_svr=round(float(away_xg_svr_raw), 2)
 
-    db_prediction = crud.create_predicted_match(db, prediction=prediction_create_data)
-    return db_prediction
+    
+    db.commit()
+    db.refresh(match)
+    return match

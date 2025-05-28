@@ -4,7 +4,7 @@ import pandas as pd
 import seaborn as sns
 from scipy.stats import spearmanr, pearsonr
 from sklearn.model_selection import train_test_split, RandomizedSearchCV, TimeSeriesSplit
-from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.linear_model import LogisticRegression, LinearRegression, Ridge
 from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_absolute_error, mean_squared_error, make_scorer
 from sklearn.preprocessing import StandardScaler
@@ -79,9 +79,18 @@ def train_models():
       best_lr_model = random_search_lr.best_estimator_
       print("Best Model:", best_lr_model)
 
-   #Logistic Regression 
 
-   model =  make_pipeline(StandardScaler(), LogisticRegression(penalty='l1', class_weight='balanced', solver='saga', max_iter=5000, random_state=42, C=1.146))
+   model = Pipeline([
+      ('scaler', StandardScaler()), 
+      ('model', LogisticRegression(
+         penalty='l1', 
+         class_weight='balanced', 
+         solver='saga', 
+         max_iter=5000, 
+         random_state=42, 
+         C=1.146
+      ))
+   ])
    model.fit(X_train, y_train)
 
 
@@ -119,9 +128,10 @@ def train_models():
       print("Best model:", best_rf_clf_model)
 
    #Random Forest Classifier scores
-   rf_model = make_pipeline(
-      StandardScaler(), 
-      RandomForestClassifier(
+
+   rf_model = Pipeline([
+      ('scaler', StandardScaler()), 
+      ('model',RandomForestClassifier(
          criterion='gini', 
          n_estimators=180, 
          max_features=None,
@@ -130,6 +140,7 @@ def train_models():
          max_depth=9, 
          min_samples_leaf=3, 
          min_samples_split=15))
+   ])
    
    rf_model.fit(X_train, y_train)
 
@@ -166,9 +177,9 @@ def train_models():
       y_pred_xgb = xgb_search.predict(X_test)
       print("XGBoost Classifier - Classification raport in test values:\n", classification_report(y_xgb_test, y_pred_xgb))
    
-   pipeline_xgb_classifier = make_pipeline(
-      StandardScaler(), 
-      XGBClassifier(
+   pipeline_xgb_classifier = Pipeline([
+      ('scaler',StandardScaler()), 
+      ('model', XGBClassifier(
          alpha=0.176, 
          colsample_bytree = 0.722, 
          gamma = 0.082, 
@@ -179,6 +190,7 @@ def train_models():
          objective='multi:softmax', 
          eval_metric='mlogloss', 
          random_state=42))
+   ])
    
    y_xgb = y_train + 1
    y_xgb_test = y_test + 1 
@@ -215,15 +227,16 @@ def train_models():
       print("\nSVC Classifier - Best Parameters: ", svc_search.best_params_)
       print("SVC CLassifier - The best average accuracy CV:", svc_search.best_score_)
 
-   pipeline_svc_classifier = make_pipeline(
-      StandardScaler(), 
-      SVC(
+   pipeline_svc_classifier = Pipeline([
+      ('scaler', StandardScaler()), 
+      ('model', SVC(
          random_state= 42,
          probability=True,
          C=2.06,
          degree=2,
          gamma=0.962,
          kernel='linear'))
+   ])
    pipeline_svc_classifier.fit(X_train, y_train)
    y_pred_svc = pipeline_svc_classifier.predict(X_test)
    print("\nSupport Vector Classifier - Accuracy: ", accuracy_score(y_test, y_pred_svc))
@@ -232,7 +245,7 @@ def train_models():
 
    trained_ml_models['support_vector_classifier'] = pipeline_svc_classifier
 
-   #Linear Regression
+   #Linear Regression (Ridge)
 
    #Target for linear reggresion
    y_home_goals = merged_matches["Home Goals"]
@@ -245,8 +258,14 @@ def train_models():
    X_train_away, X_test_away, y_train_away, y_test_away = train_test_split(X, y_away_goals, test_size=0.2, random_state=42)
 
 
-   home_goals_model = make_pipeline(StandardScaler(), LinearRegression())
-   away_goals_model = make_pipeline(StandardScaler(), LinearRegression())
+   home_goals_model = Pipeline([
+      ('scaler', StandardScaler()), 
+      ('model', Ridge(alpha=1.0))
+      ])
+   away_goals_model = Pipeline([
+      ('scaler', StandardScaler()), 
+      ('model', Ridge(alpha=1.0))
+      ])
    home_goals_model.fit(X_train_home, y_train_home)
    away_goals_model.fit(X_train_away, y_train_away)
 
@@ -261,8 +280,8 @@ def train_models():
    print("MAE:", mean_absolute_error(y_test_away, y_pred_away))
    print("MSE:", mean_squared_error(y_test_away, y_pred_away))
 
-   trained_ml_models['linear_reggresor_home'] = home_goals_model
-   trained_ml_models['linear_reggresor_away'] = away_goals_model
+   trained_ml_models['linear_regressor_home'] = home_goals_model
+   trained_ml_models['linear_regressor_away'] = away_goals_model
 
 
    #Random Forest Regressor Tuning
@@ -309,9 +328,9 @@ def train_models():
 
    #Random Forest Regressor Scores
 
-   home_goals_rf = make_pipeline(
-      StandardScaler(), 
-      RandomForestRegressor(
+   home_goals_rf = Pipeline([
+      ('scaler', StandardScaler()), 
+      ('model', RandomForestRegressor(
       n_estimators=260,
       criterion='absolute_error',
       random_state=42, 
@@ -319,10 +338,11 @@ def train_models():
       max_features=None, 
       min_samples_leaf=29, 
       min_samples_split=22))
+   ])
    
-   away_goals_rf = make_pipeline(
-      StandardScaler(), 
-      RandomForestRegressor(
+   away_goals_rf = Pipeline([
+      ('scaler', StandardScaler()), 
+      ('model', RandomForestRegressor(
          n_estimators=838, 
          criterion='absolute_error',
          random_state=42, 
@@ -330,6 +350,7 @@ def train_models():
          max_features='log2', 
          min_samples_leaf=27, 
          min_samples_split=36))
+   ])
 
    home_goals_rf.fit(X_train_home, y_train_home)
    away_goals_rf.fit(X_train_away, y_train_away)
@@ -384,25 +405,25 @@ def train_models():
       print("\nXGBoost Regressor (Away Goals) - Best Parameters", xgb_regressor_search_away.best_params_)
       print("XGBoost Regressor (Away Goals) - The Best average MAE CV: ", -xgb_regressor_search_away.best_score_)
 
-   home_goals_xgb = make_pipeline(
-      StandardScaler(),
-      XGBRegressor(
+   home_goals_xgb = Pipeline([
+      ('scaler', StandardScaler()),
+      ('model', XGBRegressor(
          learning_rate = 0.216,
          max_depth = 7,
          n_estimators = 149,
          subsample = 0.8286
-      )
-   )
+      ))
+   ])
 
-   away_goals_xgb = make_pipeline(
-      StandardScaler(),
-      XGBRegressor(
+   away_goals_xgb = Pipeline([
+      ('scaler', StandardScaler()),
+      ('model', XGBRegressor(
          learning_rate = 0.216,
          max_depth = 7,
          n_estimators = 149,
          subsample = 0.8286
-      )
-   )
+      ))
+   ])
    home_goals_xgb.fit(X_train_home, y_train_home)
    away_goals_xgb.fit(X_train_away, y_train_away)
 
@@ -465,24 +486,25 @@ def train_models():
       print("\nSVR Regressor (Away Goals) - Best Parameters: ", svr_search_away.best_params_)
       print("SVR Regressor (Away Goals) - Best average MAE CV: ", -svr_search_away.best_score_)
 
-   home_goals_svr = make_pipeline(
-      StandardScaler(),
-      SVR(
+   home_goals_svr = Pipeline([
+      ('scaler', StandardScaler()),
+      ('model', SVR(
          C=1.495,
          epsilon=0.156,
          gamma='auto',
          kernel='linear'
       ))
+   ])
    
-   away_goals_svr = make_pipeline(
-      StandardScaler(),
-      SVR(
+   away_goals_svr = Pipeline([
+      ('scaler',StandardScaler()),
+      ('model', SVR(
          C=5.243,
          epsilon=0.306,
          gamma='scale',
          kernel='linear'
-      )
-   )
+      ))
+   ])
    
    home_goals_svr.fit(X_train_home, y_train_home)
    away_goals_svr.fit(X_train_away, y_train_away)
@@ -501,16 +523,6 @@ def train_models():
    trained_ml_models['support_vector_regressor_home'] = home_goals_svr
    trained_ml_models['support_vector_regressor_away'] = away_goals_svr
 
-
-   importances = model.named_steps['logisticregression'].coef_[0]
-   feature_importance_df = pd.DataFrame({'Feature': X.columns, 'Importance': importances})
-   print(feature_importance_df.sort_values(by='Importance', ascending=False))
-
-
-   rf_model_step = rf_model.named_steps['randomforestclassifier']
-   importancesRF = rf_model_step.feature_importances_
-   feature_importance_rf = pd.DataFrame({'Feature': X.columns, 'Importance RF': importancesRF})
-   print(feature_importance_rf.sort_values(by='Importance RF', ascending=False))
 
    #logisticRegressionTuning()
    #randomForestRegressorTuning()
@@ -744,11 +756,5 @@ def train_models():
    plt.xticks(rotation=90)
    plt.tight_layout()
    plt.savefig(visualization_folder + "Barplot of Average Position Overall by Team")
-
-   plt.figure(figsize=(13, 8))
-   sns.barplot(data=feature_importance_df.sort_values(by='Importance', ascending=False).head(20),
-               x='Importance', y='Feature', palette='viridis')
-   plt.title("Top 20 Feature Importances (Logistic Regression)")
-   plt.savefig(visualization_folder + "Barplot of top 20 importance features")
 
 train_models()

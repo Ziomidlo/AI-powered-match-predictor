@@ -8,9 +8,11 @@ from database import engine, get_db
 from contextlib import asynccontextmanager
 #from data_processing import run_data_process
 from data_learning import train_models
-from schemas import League, LearningFeature, PredictedMatch, SeasonStats, Team, Match
+from schemas import League, LearningFeature, PredictedMatch, PredictedMatchOut, SeasonStats, Team, Match, PredictedMatchCreate, PredictedMatchPredictionResult
 from sqlalchemy.orm import Session
-from crud import get_learning_features, get_learning_features_for_team, get_predicted_match, get_predicted_matches, get_season_stats_for_team, get_team, get_teams, get_matches, get_match, get_league_table, get_season_stats
+from crud import get_learning_features, get_learning_features_for_team, get_predicted_match, get_predicted_matches, get_season_stats_for_team, get_team, get_teams, get_matches, get_match, get_league_table, get_season_stats, create_empty_prediction_match, delete_predicted_match
+from prediction_service import generate_and_store_match_prediction
+from models import PredictedMatch as PredictedMatchDB
 
 
 @asynccontextmanager
@@ -109,7 +111,26 @@ def read_predicted_match(match_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Predicted Match not found")
     return db_predicted_match
 
+@app.post("/predicted_matches/create", response_model=PredictedMatchOut)
+def create_empty_match(data: PredictedMatchCreate, db: Session = Depends(get_db)):
+    if data.home_team_id == data.away_team_id:
+        raise HTTPException(status_code=400, detail="Teams must be different")
+    return create_empty_prediction_match(db, data.home_team_id, data.away_team_id)
 
+
+@app.post("/predicted_matches/predict/{prediction_id}", response_model=PredictedMatchPredictionResult)
+def run_prediction(prediction_id:int, db: Session = Depends(get_db)):
+    match = db.query(PredictedMatchDB).filter(PredictedMatchDB.id == prediction_id).first()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match to predict not found")
+    if match.is_predicted:
+        raise HTTPException(status_code=400, detail="Match already predicted")
+    return generate_and_store_match_prediction(db, prediction_id)
+
+@app.delete("/predicted_matches/{prediction_id}")
+def delete_prediction(prediction_id: int, db: Session = Depends(get_db)):
+    delete_predicted_match(db, prediction_id)
+    return {"message": "Prediction deleted."}
                                
 
         
