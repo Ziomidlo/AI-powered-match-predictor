@@ -8,9 +8,9 @@ from database import engine, get_db
 from contextlib import asynccontextmanager
 #from data_processing import run_data_process
 from data_learning import train_models
-from schemas import League, LearningFeature, PredictedMatch, PredictedMatchOut, SeasonStats, Team, Match, PredictedMatchCreate, PredictedMatchPredictionResult
+from schemas import Season, League, LearningFeature, PredictedMatch, PredictedMatchOut, SeasonStats, Team, Match, PredictedMatchCreate, PredictedMatchPredictionResult
 from sqlalchemy.orm import Session
-from crud import get_learning_features, get_learning_features_for_team, get_predicted_match, get_predicted_matches, get_season_stats_for_team, get_team, get_teams, get_matches, get_match, get_league_table, get_season_stats, create_empty_prediction_match, delete_predicted_match
+from crud import get_seasons, get_season, get_learning_features, get_learning_features_for_team, get_predicted_match, get_predicted_matches, get_season_stats_for_team, get_team, get_teams, get_matches, get_match, get_league_table, get_season_stats, create_empty_prediction_match, delete_predicted_match, get_matches_by_season
 from prediction_service import generate_and_store_match_prediction
 from models import PredictedMatch as PredictedMatchDB
 
@@ -38,9 +38,21 @@ app.add_middleware(
 def root():
     return {"message": "Backend API running!"}
 
+@app.get("/seasons/", response_model=List[Season])
+def read_seasons(skip: int=0, db: Session= Depends(get_db)):
+    seasons = get_seasons(db, skip=skip)
+    return seasons
+
+@app.get("/seasons/{season_id}", response_model=Season)
+def read_season(season_id: int, db:Session = Depends(get_db)):
+    season = get_season(db, season_id=season_id)
+    if season is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Season not found")
+    return season
+
 @app.get("/teams/", response_model=List[Team])
 def read_teams(skip: int=0, db: Session = Depends(get_db)):
-    teams = get_teams(db, skip)
+    teams = get_teams(db, skip=skip)
     return teams
 
 @app.get("/teams/{team_id}", response_model=Team)
@@ -61,6 +73,11 @@ def read_match(match_id: int, db: Session = Depends(get_db)):
     if db_match is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found")
     return db_match
+
+@app.get("/matches/season/{season_id}", response_model=List[Match])
+def read_matches_by_season( season_id: int, skip: int=0, limit: int=50, db:Session = Depends(get_db)):
+    matches = get_matches_by_season(db, season_id=season_id, skip=skip, limit=limit)
+    return matches
 
 @app.get("/leagues/{season_id}", response_model=List[League])
 def read_league(season_id: int, db: Session = Depends(get_db)):

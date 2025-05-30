@@ -1,8 +1,14 @@
 from typing import Any, Dict, Optional
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
-from models import League, LearningFeature, Match, PredictedMatch, SeasonStats, Team
+from models import League, LearningFeature, Match, PredictedMatch, Season, SeasonStats, Team
 from schemas import PredictedMatchCreate, PredictedMatchPredictionResult
+
+def get_season(db: Session, season_id: int):
+    return db.query(Season).filter(Season.id == season_id).first()
+
+def get_seasons(db: Session, skip: int = 0):
+    return db.query(Season).offset(skip).all()
 
 def get_team(db: Session, team_id: int):
     return db.query(Team).filter(Team.id == team_id).first()
@@ -15,6 +21,9 @@ def get_match(db: Session, match_id: int):
 
 def get_matches(db: Session, skip: int = 0, limit: int = 50):
     return db.query(Match).offset(skip).limit(limit=limit).all()
+
+def get_matches_by_season(db: Session, season_id:int, skip: int =0, limit: int = 50):
+    return db.query(Match).filter(Match.season_id == season_id).offset(skip).limit(limit=limit).all()
 
 def get_league_table(db: Session, season_id: int):
     return db.query(League).filter(League.season_id == season_id)\
