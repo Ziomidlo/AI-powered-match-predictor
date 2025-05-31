@@ -1,8 +1,6 @@
 <script>
     import { onMount } from 'svelte';
-    // W SvelteKit, jeśli api.js jest w src/lib, importujesz go przez $lib
     import { apiFetch } from '../lib/api.js'; 
-    // Importuj swoje komponenty (zakładam, że są w src/lib/components/)
     import SeasonSelector from '../components/SeasonSelector.svelte';
     import LastMatches from '../components/LastMatches.svelte';
     import LeagueTable from '../components/LeagueTable.svelte';
@@ -10,38 +8,21 @@
     import avgPoints from '../assets/Barplot of Average Points Per Game by Team.png'
 
 
-    // Ścieżka do obrazka - jeśli jest w static/, to ścieżka jest od root
-    // Jeśli jest w src/assets i importujesz go, Vite/SvelteKit zajmie się ścieżką
-    // Dla przykładu załóżmy, że MatchResults jest w static/visualizations/
-
-    let selectedSeasonId = 1; // Zmieniono nazwę, żeby było jasne, że to ID
-    let seasons = []; // Powinno zawierać obiekty { id: 1, season_name: "2023/2024" }
-
+    let selectedSeasonId = null;
+    let seasons = []; 
     onMount(async () => {
     try {
         const data = await apiFetch("/seasons"); 
         if (data && data.length > 0) {
-            // (2) Przekształć dane sezonów na format {id, name}
-            // Zakładając, że API zwraca np. [{id: 1, season: "2023/2024"}, ...]
             seasons = data.map(s => ({ id: s.id, name: s.season })); 
-            // (3) Ustaw domyślny selectedSeasonId (np. ostatni z listy)
             if (seasons.length > 0) {
-                 // Zakładając, że API zwraca sezony posortowane (np. najnowszy na końcu lub początku)
-                 // Jeśli sortowanie jest rosnące po ID lub nazwie:
-                 selectedSeasonId = 1
-                 // Jeśli sortowanie jest malejące:
-                 // selectedSeasonId = seasons[0].id;
+                 selectedSeasonId = seasons[0].id;
             }
         }
     } catch (e) {
         console.error("Error fetching seasons for dashboard:", e);
     }
 
-    function handleSeasonChange(event) {
-    // event.detail teraz powinno być ID sezonu (lub null) z poprawionego SeasonSelector
-    selectedSeasonId = event.detail; 
-    console.log("Dashboard: Zmieniono sezon na ID:", selectedSeasonId); // Do debugowania
-}
 });
 
 
@@ -76,17 +57,15 @@
 
 
 <style>
-    /* Style dla Dashboard.svelte (te które były wcześniej) */
     .dashboard-grid {
         display: grid;
-        grid-template-columns: 1.2fr 1fr; /* Dostosuj proporcje */
+        grid-template-columns: 1.2fr 1fr;
         gap: 2rem;
     }
     .left{
         text-align: center;
-        /* Usunięto powtarzające się style, zakładając, że .card jest zdefiniowane globalnie lub w layoucie */
     }
-    .card { /* Dodaj ten styl do globalnego app.css lub +layout.svelte <style global> */
+    .card {
         background: white;
         padding: 1.5rem;
         border-radius: 8px;

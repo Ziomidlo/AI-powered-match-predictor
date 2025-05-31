@@ -259,10 +259,10 @@
     }
 
 
-    .sidebar-right { /* Nowy kontener dla legendy i wizualizacji */
+    .sidebar-right {
         display: flex;
         flex-direction: column;
-        gap: 2rem; /* Odstęp między legendą a wizualizacjami */
+        gap: 2rem;
         align-self: flex-start;
     }
 
@@ -279,7 +279,7 @@
     }
 
     img {
-    max-width: 200%;
-    max-height: 200%;
+    max-width: 150%;
+    max-height: 150%;
     }
 </style>

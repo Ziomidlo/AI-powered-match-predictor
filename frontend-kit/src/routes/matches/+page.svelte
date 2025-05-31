@@ -1,11 +1,12 @@
 <script>
-    import { onMount } from 'svelte';
+    import { onMount, afterUpdate } from 'svelte';
     import { apiFetch } from '$lib/api.js'; 
     import SeasonSelector from '../../components/SeasonSelector.svelte'
 
     let allSeasons = [];
     let selectedSeasonId = null;
     let playedMatches = [];
+    let lastSeasonId = null;
     
     let isLoadingSeasons = true;
     let isLoadingMatches = false;
@@ -42,9 +43,9 @@
         isLoadingMatches = true; error = null;
         const skip = currentPage * limit;
         try {
-            // Zakładamy, że /api/matches domyślnie zwraca rozegrane lub ma parametr status=played
-            const endpoint = `/matches?season_id=${selectedSeasonId}&skip=${skip}&limit=${limit}`;
+            const endpoint = `/matches/season/${selectedSeasonId}?skip=${skip}&limit=${limit}`;
             const data = await apiFetch(endpoint);
+            console.log("Endpoint: ", endpoint)
             playedMatches = data || [];
         } catch (err) {
             console.error("Error fetching played matches:", err);
@@ -55,11 +56,15 @@
         }
     }
 
-    $: if (selectedSeasonId !== null && allSeasons.length > 0) {
-        currentPage = 0; // Resetuj stronę przy zmianie sezonu
-        console.log("WYbrany sezon:", selectedSeasonId)
+    afterUpdate(() => {
+    if (selectedSeasonId && selectedSeasonId !== lastSeasonId) {
+        lastSeasonId = selectedSeasonId;
+        console.log("Wybrany sezon: " ,selectedSeasonId )
+        currentPage = 0;
         fetchPlayedMatchesData();
     }
+    })
+
 
     function navigatePage(direction) {
         if (direction === 1 && playedMatches.length === limit) currentPage++;
@@ -95,14 +100,23 @@
             <p class="error-message">{error}</p>
         {:else if playedMatches.length > 0}
             <ul class="match-list">
-                <li class="list-header"><span>Data</span><span>Gospodarz</span><span>Wynik</span><span>Gość</span><span>Akcje</span></li>
+                <li class="list-header match-item-grid">
+                    <span class="header-date">Data</span>
+                    <span class="header-home-team">Gospodarz</span>
+                    <span class="header-score">Wynik</span>
+                    <span class="header-away-team">Gość</span>
+                    <span class="header-xg">xG (H:A)</span>
+                </li>
                 {#each playedMatches as match (match.id)}
-                    <li class="match-item">
+                    <li class="match-item match-item-grid">
                         <span class="match-date">{new Date(match.match_date).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
                         <span class="team home-team">{match.home_team.team_name}</span>
-                        <strong class="score">{match.home_xG} : {match.away_xG}</strong>
-                        <strong class="score">{match.home_goals} - {match.away_goals}</strong>
+                        <strong class="score actual-score">{match.home_goals} - {match.away_goals}</strong>
                         <span class="team away-team">{match.away_team.team_name}</span>
+                        <span class="score xg-score">
+                            {match.home_xG !== null && match.home_xG !== undefined ? match.home_xG.toFixed(2) : 'N/A'} : 
+                            {match.away_xG !== null && match.away_xG !== undefined ? match.away_xG.toFixed(2) : 'N/A'}
+                        </span>
                     </li>
                 {/each}
             </ul>
@@ -118,46 +132,63 @@
 </section>
 
 <style>
-    /* ... (style z poprzedniej odpowiedzi dla .matches-page, .view-selector, .match-list, .match-item, itd.) ... */
-    /* Dodatkowe lub zmodyfikowane style */
-    .controls-wrapper {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 1.5rem;
-        flex-wrap: wrap; /* Na mniejszych ekranach */
+
+    .match-list {
+        list-style: none;
+        padding: 0;
     }
-    .list-header {
-        display: flex;
+
+    .match-item-grid {
+        display: grid;
+        grid-template-columns: minmax(100px, 1fr) minmax(150px, 2fr) minmax(70px, 0.7fr) minmax(90px, 0.8fr) minmax(150px, 2fr) minmax(100px, 1fr);
         align-items: center;
+        gap: 0.5rem;
+        padding: 0.8rem 0.5rem;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .list-header {
         font-weight: bold;
-        padding: 0.8rem 1rem;
         background-color: #f8f9fa;
         border-bottom: 2px solid #e0e0e0;
         margin-bottom: 0.5rem;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        padding: 0.8rem 0.5rem;
     }
-    .list-header span { flex: 1; text-align: center; }
-    .list-header span:nth-child(1) { flex-basis: 160px; text-align: left;} /* Data */
-    .list-header span:nth-child(2) { flex-basis: 30%; text-align: right; padding-right: 0.5rem;} /* Home Team */
-    .list-header span:nth-child(3) { flex-basis: 15%; font-size: 1.1em;} /* Score / Prediction % */
-    .list-header span:nth-child(4) { flex-basis: 30%; text-align: left; padding-left: 0.5rem;} /* Away Team */
-    .list-header span:nth-child(5) { flex-basis: 150px; text-align: right;} /* Akcje lub xG */
     
-    .match-item > * {
-        padding: 0 0.25rem; /* Mniejszy padding dla elementów w wierszu */
+    .header-date, .match-date { text-align: left; }
+    .header-home-team, .team.home-team { text-align: right; }
+    .header-score, .score, .header-xg { text-align: center; }
+    .header-away-team, .team.away-team { text-align: left; }
+    .header-actions, .match-item-grid > .predict-link-button-small { text-align: center; }
+
+
+    .match-item {
+        background-color: #fff;
     }
-    .match-item .match-date { flex-basis: 160px; text-align: left; }
-    .match-item .team.home-team { flex-basis: 30%; text-align: right; }
-    .match-item .score, .match-item .vs-separator, .match-item .prediction-probabilities, .match-item .prediction-xg {
-        flex-basis: 15%; text-align: center;
+    .match-item:nth-child(even) {
     }
-    .match-item .team.away-team { flex-basis: 30%; text-align: left;}
-    .match-item .predict-link-button-small, .match-item .badge-predicted {
-        flex-basis: 150px; 
-        text-align: right;
-        margin-left: auto; /* Dopasowanie, jeśli było wcześniej */
+    .match-item:hover {
+        background-color: #f0f8ff;
     }
-    .predict-link-button-small { /* Mniejsza wersja przycisku */
+
+    .team {
+        font-weight: 500;
+    }
+    .score {
+        font-weight: bold;
+    }
+    .actual-score {
+        font-size: 1.1em;
+    }
+    .xg-score {
+        font-size: 0.9em;
+        color: #555;
+    }
+
+    .predict-link-button-small {
         padding: 0.3rem 0.6rem;
         font-size: 0.8rem;
         background-color: #5cb85c;
@@ -165,11 +196,18 @@
         border-radius: 3px;
         text-decoration: none;
         white-space: nowrap;
+        justify-self: center;
     }
     .predict-link-button-small:hover{
         background-color: #4cae4c;
     }
-    .prediction-list .prediction-probabilities { font-size: 0.9em; color: #337ab7; }
-    .prediction-list .prediction-xg { font-size: 0.9em; color: #5cb85c; }
 
+    .pagination-controls {
+        margin-top: 2rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 1rem;
+    }
+    .error-message { color: red; }
 </style>

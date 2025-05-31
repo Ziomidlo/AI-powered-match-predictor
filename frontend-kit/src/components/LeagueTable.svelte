@@ -1,33 +1,31 @@
 <script>
-    import { onMount, afterUpdate } from 'svelte'; // Dodano afterUpdate dla debugowania
-    import { apiFetch } from '../lib/api.js'; // Upewnij się, że ścieżka jest poprawna ($lib/api.js dla SvelteKit)
+    import { onMount, afterUpdate } from 'svelte';
+    import { apiFetch } from '../lib/api.js';
     
-    export let seasonId; // Zmieniono nazwę na seasonId dla spójności
+    export let seasonId;
 
     let leagueTable = [];
-    let isLoading = false; // Dodano isLoading
-    let error = null; // Dodano error
+    let isLoading = false;
+    let error = null;
 
-    // Ta reaktywna instrukcja $: jest lepsza niż onMount + afterUpdate do reagowania na zmiany propsów
-    // Uruchomi się raz na początku (jeśli seasonId ma wartość) i za każdym razem, gdy seasonId się zmieni.
-    $: if (seasonId !== null && seasonId !== undefined) { // (1) Reaguj na zmianę seasonId
+    $: if (seasonId !== null && seasonId !== undefined) {
         fetchTable(seasonId);
     } else {
-        leagueTable = []; // Wyczyść tabelę, jeśli seasonId jest null/undefined
+        leagueTable = [];
     }
 
-    async function fetchTable(currentSeasonId) { // (2) Przyjmij seasonId jako argument
+    async function fetchTable(currentSeasonId) {
         if (currentSeasonId === null || currentSeasonId === undefined) {
             leagueTable = [];
             return;
         }
         isLoading = true;
         error = null;
-        console.log(`LeagueTable: Fetching table for season ID: ${currentSeasonId}`); // Do debugowania
+        console.log(`LeagueTable: Fetching table for season ID: ${currentSeasonId}`);
         try {
             const data = await apiFetch(`/leagues/${currentSeasonId}`);
             if (Array.isArray(data)) {
-                leagueTable = data.sort((a,b) => a.position - b.position); // Sortuj po pozycji
+                leagueTable = data.sort((a,b) => a.position - b.position);
             } else {
                 console.error("LeagueTable: Fetched data is not an array", data);
                 leagueTable = [];
@@ -86,6 +84,3 @@
 {:else}
     {/if}
 
-<style>
-  /* ... Twoje style dla tabeli ... */
-</style>
