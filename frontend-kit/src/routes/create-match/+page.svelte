@@ -5,6 +5,7 @@
     import { preventDefault } from 'svelte/legacy';
     import tpi from '../../assets/Barplot of Team Power Index.png'
     import chart from '../../assets/Bar chart of Match Result Distribution.png'
+    import ImageModal from '$components/ImageModal.svelte';
 
     let allTeams = [];
     let homeTeamId = null;
@@ -14,6 +15,20 @@
     let error = null;
     let successMessage = null;
     let isSubmitting = false;
+
+    let isModalOpen = false;
+    let modalImageSrc = '';
+    let modalImageAlt = '';
+
+    function openImageModal(src, alt = 'Wizualizacja') {
+        modalImageSrc = src;
+        modalImageAlt = alt;
+        isModalOpen = true;
+    }
+
+    function closeImageModal() {
+        isModalOpen = false;
+    }
 
     onMount(async () => {
         isLoadingTeams = true;
@@ -105,13 +120,40 @@
             <p class="error-message" style="margin-top: 1rem;">{error}</p>
         {/if}
     {/if}
-    <div class="visualizations-area card" style="margin-top: 2rem;">
-        <h2>Wizualizacje Ogólne</h2>
-        <div class="viz-grid">
-            <div class="viz-placeholder"><img src="{tpi}" alt="Wykres TPI"></div>
-            <div class="viz-placeholder"><img src="{chart}" alt="Wykres"></div>
-        </div>
+<div class="visualizations-area card">
+    <h2>Wizualizacje</h2>
+    <div class="viz-grid">
+        
+        <figure class="visualization-item">
+            <img src={tpi} alt="Wykres Team Power Index" />
+            <figcaption>
+                Team Power Index dla Drużyn
+                <button on:click={() => openImageModal(tpi, 'Wykres Team Power Index')} class="zoom-button" title="Powiększ">
+                    🔍
+                </button>
+            </figcaption>
+        </figure>
+
+        <figure class="visualization-item">
+            <img src={chart} alt="Wykres średniej liczby punktów" />
+            <figcaption>
+                Wykres rezultatów
+                <button on:click={() => openImageModal(chart, 'Wykres średniej liczby punktów')} class="zoom-button" title="Powiększ">
+                    🔍
+                </button>
+            </figcaption>
+        </figure>
+
     </div>
+</div>
+
+{#if isModalOpen}
+    <ImageModal 
+        imageSrc={modalImageSrc} 
+        imageAlt={modalImageAlt} 
+        on:close={closeImageModal}
+    />
+{/if}
 </section>
 
 <style>
@@ -191,4 +233,45 @@
     max-height: 100%;
     }
     .error-message { color: red; }
+
+    
+    .visualization-item {
+        border: 1px solid #eee;
+        border-radius: 6px;
+        padding: 0.5rem;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .visualization-item img {
+        width: 100%;
+        height: auto;
+        object-fit: contain;
+        margin-bottom: 0.5rem;
+    }
+
+    .visualization-item figcaption {
+        font-size: 0.9em;
+        color: #555;
+        padding-top: 0.5rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .zoom-button {
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        cursor: pointer;
+        margin-left: 0.5rem;
+        padding: 0.2rem;
+        line-height: 1;
+        transition: transform 0.2s ease;
+    }
+    .zoom-button:hover {
+        transform: scale(1.2);
+    }
 </style>

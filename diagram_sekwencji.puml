@@ -1,0 +1,50 @@
+@startuml
+title Diagram Sekwencji: Generowanie Predykcji Meczu
+
+' Definicja uczestników interakcji
+actor "Użytkownik" as user
+participant "Frontend (Svelte)" as frontend
+participant "Backend (FastAPI)" as backend
+database "Baza Danych (SQLite)" as db
+
+' Sekwencja zdarzeń
+
+user -> frontend: Wybiera drużyny i klika "Przewiduj"
+activate frontend
+
+frontend -> backend: Żądanie HTTP POST /predicted_matches/create
+activate backend
+note right of backend: Utworzenie pustego obiektu predykcji
+
+backend -> db: INSERT INTO predicted_matches (...)
+activate db
+db --> backend: Zwraca ID nowego rekordu
+deactivate db
+
+backend --> frontend: Odpowiedź 201 Created (z ID predykcji)
+deactivate backend
+
+frontend -> backend: Żądanie HTTP POST /predicted_matches/predict/{id}
+activate backend
+note right of backend: Uruchomienie usługi PredictionService
+
+backend -> db: SELECT * FROM teams, matches WHERE ...
+activate db
+db --> backend: Zwraca dane historyczne
+deactivate db
+
+backend -> backend: generate_and_store_match_prediction()
+note right of backend: Przetwarzanie cech i uruchomienie modeli ML
+
+backend -> db: UPDATE predicted_matches SET ... WHERE id = ...
+activate db
+db --> backend: Potwierdzenie aktualizacji
+deactivate db
+
+backend --> frontend: Odpowiedź 200 OK (z pełnymi wynikami predykcji)
+deactivate backend
+
+frontend -> user: Wyświetla wyniki predykcji
+deactivate frontend
+
+@enduml

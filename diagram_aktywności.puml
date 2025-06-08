@@ -1,0 +1,63 @@
+@startuml
+title Diagram Aktywności: Generowanie Predykcji Meczu
+
+|Aktor (Użytkownik)|
+start
+:Otwiera stronę aplikacji;
+
+|Frontend (Svelte)|
+:Wyświetla interfejs wyboru drużyn;
+
+|Aktor (Użytkownik)|
+:Klika przycisk "Przewiduj";
+
+|Frontend (Svelte)|
+:Wysyła żądanie stworzenia meczu
+
+|Backend (FastAPI)|
+:Odbiera żądanie utworzenia predykcji;
+:Tworzy nowy rekord w bazie danych;
+
+|Baza Danych (SQLite)|
+-> Backend : Zapisuje pusty rekord 'PredictedMatch'
+note right:
+;
+
+|Frontend (Svelte)|
+:Wysyła żądanie przewidywania meczu
+
+|Backend (FastAPI)|
+:Odbiera żądanie predykcji;
+:Pobiera dane historyczne i cechy drużyn;
+
+|Baza Danych (SQLite)|
+-> Backend :
+;
+|Backend (FastAPI)|
+:Uruchamia modele predykcyjne (ML);
+note right: Wykonywanie obliczeń dla modeli:\nLR, RFC, XGB, SVC...
+if (Predykcja powiodła się?) then (tak)
+    :Aktualizuje rekord w bazie o wyniki;
+    
+    |Baza Danych (SQLite)|
+    -> Backend :
+    note right: 
+    ;
+    |Backend (FastAPI)|
+    :Zwraca pełne wyniki predykcji (JSON);
+
+    |Frontend (Svelte)|
+    :Odbiera wyniki predykcji;
+    :Wyświetla wyniki na ekranie;
+
+
+else (nie)
+    :Zwraca błąd do frontendu;
+    
+    |Frontend (Svelte)|
+    :Wyświetla komunikat o błędzie;
+    
+endif
+stop
+
+@enduml

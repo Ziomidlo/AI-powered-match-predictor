@@ -1,0 +1,138 @@
+@startuml
+skinparam linetype ortho
+hide empty members
+
+
+entity "Season" as season {
+  + id : int [PK]
+  --
+  season : varchar
+}
+
+entity "Team" as team {
+  + id : int [PK]
+  --
+  team_name : varchar
+  venue : varchar
+}
+
+entity "Match" as match {
+  + id : int [PK]
+  --
+  match_date : varchar
+  result_numeric : int
+  home_goals : int
+  away_goals : int
+  home_xG : float
+  away_xG : float
+  --
+  season_id : int [FK]
+  home_team_id : int [FK]
+  away_team_id : int [FK]
+}
+
+entity "League" as league {
+  + id : int [PK]
+  --
+  position : int
+  games_played : int
+  wins : int
+  draws : int
+  losses : int
+  goals_for : int
+  goals_against : int
+  goals_difference : int
+  points : int
+  --
+  season_id : int [FK]
+  team_id : int [FK]
+}
+
+entity "SeasonStats" as season_stats {
+  + id : int [PK]
+  --
+  shots : float
+  shots_on_target : float
+  free_kicks : float
+  penalty_goals : float
+  passes_completed : float
+  passes_attempted : float
+  pass_completion : float
+  corners : float
+  yellow_cards : float
+  red_cards : float
+  fouls_conceded : float
+  penalties_conceded : float
+  own_goals : float
+  --
+  season_id : int [FK]
+  team_id : int [FK]
+}
+
+entity "LearningFeature" as learning_feature {
+  + id : int [PK]
+  --
+  goals_per_match : float
+  offensive_strength : float
+  goals_conceded_per_match : float
+  defense_strength : float
+  effective_possession : float
+  passing_and_control_strength : float
+  penalties_converted_rate : float
+  set_piece_strength : float
+  team_power_index : float
+  avg_position : float
+  avg_points : float
+  --
+  season_id : int [FK]
+  team_id : int [FK]
+}
+
+entity "PredictedMatch" as predicted_match {
+  + id : int [PK]
+  --
+  is_predicted : boolean
+  home_win_probability_lr : float
+  draw_probability_lr : float
+  away_win_probability_lr : float
+  home_win_probability_rfc : float
+  draw_probability_rfc : float
+  away_win_probability_rfc : float
+  home_win_probability_xgb : float
+  draw_probability_xgb : float
+  away_win_probability_xgb : float
+  home_win_probability_svc : float
+  draw_probability_svc : float
+  away_win_probability_svc : float
+  home_expected_goals_lr : float
+  away_expected_goals_lr : float
+  home_expected_goals_rfr : float
+  away_expected_goals_rfr : float
+  home_expected_goals_xgb : float
+  away_expected_goals_xgb : float
+  home_expected_goals_svr : float
+  away_expected_goals_svr : float
+  --
+  home_team_id : int [FK]
+  away_team_id : int [FK]
+}
+
+
+
+team        ||--|{ match          
+team        ||--|{ match          
+season      ||--o{ match
+
+team        ||--o{ league
+season      ||--o{ league
+
+team        ||--o{ season_stats
+season      ||--o{ season_stats
+
+team        ||--o{ learning_feature
+season      ||--o{ learning_feature
+
+team        ||--|{ predicted_match  
+team        ||--|{ predicted_match 
+
+@enduml

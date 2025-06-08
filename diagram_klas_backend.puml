@@ -1,0 +1,138 @@
+@startuml
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+hide empty members
+
+class Season {
+  + {PK} id: Integer
+  --
+  + season: String
+}
+
+class Team {
+  + {PK} id: Integer
+  --
+  + team_name: String
+  + venue: String
+}
+
+class Match {
+  + {PK} id: Integer
+  --
+  + match_date: String
+  + result_numeric: Integer
+  + home_goals: Integer
+  + away_goals: Integer
+  + home_xG: Float
+  + away_xG: Float
+  --
+  # {FK} season_id: Integer
+  # {FK} home_team_id: Integer
+  # {FK} away_team_id: Integer
+}
+
+class League {
+  + {PK} id: Integer
+  --
+  + position: Integer
+  + games_played: Integer
+  + wins: Integer
+  + draws: Integer
+  + losses: Integer
+  + goals_for: Integer
+  + goals_against: Integer
+  + goals_difference: Integer
+  + points: Integer
+  --
+  # {FK} season_id: Integer
+  # {FK} team_id: Integer
+}
+
+class SeasonStats {
+  + {PK} id: Integer
+  --
+  + shots: Float
+  + shots_on_target: Float
+  + free_kicks: Float
+  + penalty_goals: Float
+  + passes_completed: Float
+  + passes_attempted: Float
+  + pass_completion: Float
+  + corners: Float
+  + yellow_cards: Float
+  + red_cards: Float
+  + fouls_conceded: Float
+  + penalties_conceded: Float
+  + own_goals: Float
+  --
+  # {FK} season_id: Integer
+  # {FK} team_id: Integer
+}
+
+class LearningFeature {
+  + {PK} id: Integer
+  --
+  + goals_per_match: Float
+  + offensive_strength: Float
+  + goals_conceded_per_match: Float
+  + defense_strength: Float
+  + effective_possession: Float
+  + passing_and_control_strength: Float
+  + penalties_converted_rate: Float
+  + set_piece_strength: Float
+  + team_power_index: Float
+  + avg_position: Float
+  + avg_points: Float
+  --
+  # {FK} season_id: Integer
+  # {FK} team_id: Integer
+}
+
+class PredictedMatch {
+  + {PK} id: Integer
+  --
+  + is_predicted: Boolean
+  + home_win_probability_lr: Float
+  + draw_probability_lr: Float
+  + away_win_probability_lr: Float
+  + home_win_probability_rfc: Float
+  + draw_probability_rfc: Float
+  + away_win_probability_rfc: Float
+  + home_win_probability_xgb: Float
+  + draw_probability_xgb: Float
+  + away_win_probability_xgb: Float
+  + home_win_probability_svc: Float
+  + draw_probability_svc: Float
+  + away_win_probability_svc: Float
+  + home_expected_goals_lr: Float
+  + away_expected_goals_lr: Float
+  + home_expected_goals_rfr: Float
+  + away_expected_goals_rfr: Float
+  + home_expected_goals_xgb: Float
+  + away_expected_goals_xgb: Float
+  + home_expected_goals_svr: Float
+  + away_expected_goals_svr: Float
+  --
+  # {FK} home_team_id: Integer
+  # {FK} away_team_id: Integer
+}
+
+' --- Definicja Relacji ---
+
+Team "1" -- "0..*" Match : (home_team)
+Team "1" -- "0..*" Match : (away_team)
+Season "1" -- "0..*" Match
+
+Team "1" -- "0..*" League
+Season "1" -- "0..*" League
+
+Team "1" -- "0..*" SeasonStats
+Season "1" -- "0..*" SeasonStats
+
+Team "1" -- "0..*" LearningFeature
+Season "1" -- "0..*" LearningFeature
+
+Team "1" -- "0..*" PredictedMatch : (home_team)
+Team "1" -- "0..*" PredictedMatch : (away_team)
+
+@enduml
