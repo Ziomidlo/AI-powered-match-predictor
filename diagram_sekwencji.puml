@@ -1,13 +1,10 @@
 @startuml
-title Diagram Sekwencji: Generowanie Predykcji Meczu
 
-' Definicja uczestników interakcji
 actor "Użytkownik" as user
 participant "Frontend (Svelte)" as frontend
 participant "Backend (FastAPI)" as backend
 database "Baza Danych (SQLite)" as db
 
-' Sekwencja zdarzeń
 
 user -> frontend: Wybiera drużyny i klika "Przewiduj"
 activate frontend

@@ -1,75 +1,51 @@
 <script>
-    import {onMount} from 'svelte';
-    import {apiFetch} from '$lib/api.js';
+    import { onMount } from 'svelte';
+    import { apiFetch } from '$lib/api.js';
     import SeasonSelector from '$components/SeasonSelector.svelte';
+    import ImageModal from '$components/ImageModal.svelte';
+
     import goalsPerSeason from '../../assets/Bar plot of Goals Scored per Match by Season.png'
     import goalsConcededPerSeason from '../../assets/Bar plot of Goals Conceded per Match by Season.png'
 
     let allSeasons =[];
     let selectedSeasonId = null;
-
     let teamStatistics = [];
     let isLoadingStats = false;
     let error = null;
 
-    const legendItems = [
-        {abbr: 'Sh', full: 'strzały'},
-        {abbr: 'SoT', full: 'strzały celne'},
-        {abbr: 'FK', full: 'rzuty wolne'},
-        {abbr: 'PG', full: 'Gole z rzutów karnych'},
-        {abbr: 'PCMP', full: 'podania celne'},
-        {abbr: 'PATT', full: 'podania wykonane'},
-        {abbr: 'PCMP%', full: 'podania celne w procentach'},
-        {abbr: 'CK', full: 'Rzuty rożne'},
-        {abbr: 'YC', full: 'Żółte kartki'},
-        {abbr: 'RC', full: 'Czerwone kartki'},
-        {abbr: 'FC', full: 'Popełnione faule'},
-        {abbr: 'PC', full: 'Przewinione rzuty karne (dla przeciwników)'},
-        {abbr: 'OG', full: 'Gole samobójcze'},
-    ];
+    let isModalOpen = false;
+    let modalImageSrc = '';
+    let modalImageAlt = '';
 
-    async function fetchSeasons() {
-        try{
-            const data = await apiFetch('/seasons');
-            if(data && data.length > 0) {
-                allSeasons = data.map(s => ({id: s.id, name: s.season}))
-                selectedSeasonId = 1
-            }
-        } catch(err) {
-            console.error("Error fetching seasons: ", err);
-            error = "Nie udało się załadować listy sezonów.";
-        }
+    function openModal(src, alt) {
+        modalImageSrc = src;
+        modalImageAlt = alt;
+        isModalOpen = true;
     }
 
-    async function fetchTeamStatsForSeason(seasonId) {
-        if (seasonId === null || seasonId === undefined) {
-            teamStatistics = [];
-            return;
-        }
-        isLoadingStats = true;
-        error = null;
-        try {
-            const data = await apiFetch(`/season_stats/season/${seasonId}`);
-            teamStatistics = data
-        } catch(err) {
-            console.error(`Error fetching team stats for season ${seasonId}`, err)
-            error = `Nie udało się załadować statystyk dla sezonu ${seasonId}.`;
-        } finally {
-            isLoadingStats = false;
-        }
+    function closeModal() {
+        isModalOpen = false;
     }
-
+    
+    const legendItems = [ {abbr: 'Sh', full: 'strzały'}, {abbr: 'SoT', full: 'strzały celne'}, {abbr: 'FK', full: 'rzuty wolne'}, {abbr: 'PG', full: 'Gole z rzutów karnych'}, {abbr: 'PCMP', full: 'podania celne'}, {abbr: 'PATT', full: 'podania wykonane'}, {abbr: 'PCMP%', full: 'podania celne w procentach'}, {abbr: 'CK', full: 'Rzuty rożne'}, {abbr: 'YC', full: 'Żółte kartki'}, {abbr: 'RC', full: 'Czerwone kartki'}, {abbr: 'FC', full: 'Popełnione faule'}, {abbr: 'PC', full: 'Przewinione rzuty karne (dla przeciwników)'}, {abbr: 'OG', full: 'Gole samobójcze'} ];
+    async function fetchSeasons() { try{ const data = await apiFetch('/seasons'); if(data && data.length > 0) { allSeasons = data.map(s => ({id: s.id, name: s.season})); selectedSeasonId = 1 } } catch(err) { console.error("Error fetching seasons: ", err); error = "Nie udało się załadować listy sezonów."; } }
+    async function fetchTeamStatsForSeason(seasonId) { if (seasonId === null || seasonId === undefined) { teamStatistics = []; return; } isLoadingStats = true; error = null; try { const data = await apiFetch(`/season_stats/season/${seasonId}`); teamStatistics = data } catch(err) { console.error(`Error fetching team stats for season ${seasonId}`, err); error = `Nie udało się załadować statystyk dla sezonu ${seasonId}.`; } finally { isLoadingStats = false; } }
     onMount(fetchSeasons)
-
-    $: if (selectedSeasonId !== null && selectedSeasonId !== undefined && allSeasons.length > 0) {
-        fetchTeamStatsForSeason(selectedSeasonId);
-    }
+    $: if (selectedSeasonId !== null && selectedSeasonId !== undefined && allSeasons.length > 0) { fetchTeamStatsForSeason(selectedSeasonId); }
 
 </script>
 
 <svelte:head>
     <title>Statystyki Drużyn - AI Predictor</title>
 </svelte:head>
+
+{#if isModalOpen}
+    <ImageModal 
+        imageSrc={modalImageSrc} 
+        imageAlt={modalImageAlt}
+        on:close={closeModal} 
+    />
+{/if}
 
 <section class="team-stats-page">
     <h1>Statystyki Drużyn</h1>
@@ -79,67 +55,34 @@
             availableSeasons={allSeasons} 
             bind:selectedSeasonId={selectedSeasonId} 
         />
-    {:else if !error} <p>Brak dostępnych sezonów do wyświetlenia.</p>
-    {:else if error && !isLoadingStats} <p class="error-message">{error}</p>
     {/if}
 
     <div class="content-grid">
-        <div class="stats-table-container">
+        <div class="stats-table-container card">
             {#if isLoadingStats}
                 <p>Ładowanie statystyk drużyn...</p>
-                {:else if error && teamStatistics.length === 0} <p class="error-message">{error}</p>
-                {:else if teamStatistics.length > 0 && selectedSeasonId !== null}
+            {:else if error && teamStatistics.length === 0}
+                <p class="error-message">{error}</p>
+            {:else if teamStatistics.length > 0 && selectedSeasonId !== null}
                 <h2>Statystyki dla Sezonu ID: {selectedSeasonId}</h2>
                 <div class="table-wrapper">
                     <table>
                         <thead>
-                            <tr>
-                                <th>Drużyna</th>
-                                <th>Sh</th>
-                                <th>SoT</th>
-                                <th>FK</th>
-                                <th>PG</th>
-                                <th>PCmp</th>
-                                <th>PAtt</th>
-                                <th>Pcmp%</th>
-                                <th>CK</th>
-                                <th>YC</th>
-                                <th>RC</th>
-                                <th>FC</th>
-                                <th>PC</th>
-                                <th>OG</th>
-                            </tr>
+                            <tr><th>Drużyna</th><th>Sh</th><th>SoT</th><th>FK</th><th>PG</th><th>PCmp</th><th>PAtt</th><th>Pcmp%</th><th>CK</th><th>YC</th><th>RC</th><th>FC</th><th>PC</th><th>OG</th></tr>
                         </thead>
                         <tbody>
                             {#each teamStatistics as teamStat (teamStat.team_id)}
                                 <tr>
-                                    <td>
-                                        <a href="/teams/{teamStat.team_id}" class="team-link">
-                                            {teamStat.team.team_name}
-                                        </a>
-                                    </td>
-                                    <td>{teamStat.shots}</td>
-                                    <td>{teamStat.shots_on_target}</td>
-                                    <td>{teamStat.free_kicks}</td>
-                                    <td>{teamStat.penalty_goals}</td>
-                                    <td>{teamStat.passes_completed}</td>
-                                    <td>{teamStat.passes_attempted}</td>
-                                    <td>{teamStat.pass_completion}</td>
-                                    <td>{teamStat.corners}</td>
-                                    <td>{teamStat.yellow_cards}</td>
-                                    <td>{teamStat.red_cards}</td>
-                                    <td>{teamStat.fouls_conceded}</td>
-                                    <td>{teamStat.penalties_conceded}</td>
-                                    <td>{teamStat.own_goals}</td>
+                                    <td><strong>{teamStat.team.team_name}</strong></td>
+                                    <td>{teamStat.shots}</td><td>{teamStat.shots_on_target}</td><td>{teamStat.free_kicks}</td><td>{teamStat.penalty_goals}</td><td>{teamStat.passes_completed}</td><td>{teamStat.passes_attempted}</td><td>{teamStat.pass_completion}</td><td>{teamStat.corners}</td><td>{teamStat.yellow_cards}</td><td>{teamStat.red_cards}</td><td>{teamStat.fouls_conceded}</td><td>{teamStat.penalties_conceded}</td><td>{teamStat.own_goals}</td>
                                 </tr>
                             {/each}
                         </tbody>
                     </table>
                 </div>
-            {:else if selectedSeasonId !== null && !isLoadingStats}
-                <p>Brak statystyk dla wybranego sezonu.</p>
             {/if}
         </div>
+        
         <aside class="sidebar-right">
             <div class="legend-sidebar card">
                 <h2>Legenda Skrótów</h2>
@@ -149,12 +92,21 @@
                     {/each}
                 </ul>
             </div>
+
             {#if !isLoadingStats && teamStatistics.length > 0}
                 <div class="visualizations-container card">
                     <h2>Wizualizacje dla Sezonu</h2>
-                    <div class="chart-wrapper">
-                        <img src={goalsPerSeason} alt="Wykres strzelonych goli">
-                        <img src={goalsConcededPerSeason} alt="Wykres straconych goli">
+                    <div class="chart-grid">
+                        <div class="chart-item">
+                            <img src={goalsPerSeason} alt="Wykres strzelonych goli na mecz w sezonie">
+                            <button class="zoom-btn" on:click={() => openModal(goalsPerSeason, 'Wykres strzelonych goli na mecz w sezonie')} title="Powiększ">
+                                &#128269; </button>
+                        </div>
+                        <div class="chart-item">
+                            <img src={goalsConcededPerSeason} alt="Wykres straconych goli na mecz w sezonie">
+                            <button class="zoom-btn" on:click={() => openModal(goalsConcededPerSeason, 'Wykres straconych goli na mecz w sezonie')} title="Powiększ">
+                                &#128269; </button>
+                        </div>
                     </div>
                 </div>
             {/if}
@@ -163,100 +115,23 @@
 </section>
 
 <style>
-    .team-stats-page h1 {
-        color: #333;
-        border-bottom: 2px solid #1abc9c;
-        padding-bottom: 0.5rem;
-        margin-bottom: 1.5rem;
-    }
-    .content-grid {
-        display: grid;
-        grid-template-columns: 3fr 1fr;
-        gap: 2rem;
-    }
-    .stats-table-container h2 {
-        margin-top: 0;
-        font-size: 1.2rem;
-        color: #34495e;
-    }
-    .table-wrapper {
-        overflow-x: auto;
-    }
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.9rem;
-        white-space: nowrap;
-    }
-    th, td {
-        text-align: left;
-        padding: 0.7rem 0.5rem;
-        border-bottom: 1px solid #ecf0f1;
-    }
-    th {
-        background-color: #f2f4f6;
-        font-weight: 600;
-        color: #555;
-        position: sticky;
-        top: 0;
-        z-index: 1;
-    }
-    tbody tr:hover {
-        background-color: #f9f9f9;
-    }
-    .team-link {
-        color: #007bff;
-        text-decoration: none;
-        font-weight: 500;
-    }
-    .team-link:hover {
-        text-decoration: underline;
-    }
-    .legend-sidebar {
-        padding: 1.5rem;
-        align-self: flex-start;
-    }
-    .legend-sidebar h2 {
-        margin-top: 0;
-        font-size: 1.2rem;
-        color: #34495e;
-        border-bottom: 1px solid #eee;
-        padding-bottom: 0.5rem;
-        margin-bottom: 1rem;
-    }
-    .legend-sidebar ul {
-        list-style: none;
-        padding: 0;
-        font-size: 0.9rem;
-    }
-    .legend-sidebar li {
-        margin-bottom: 0.5rem;
-    }
-    .legend-sidebar strong {
-        color: #2c3e50;
-    }
-    .error-message {
-        color: #e74c3c;
-        padding: 1rem;
-        background-color: #fdeded;
-        border: 1px solid #f5c6cb;
-        border-radius: 4px;
-    }
-    .card {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    }
-
-    @media (max-width: 992px) {
-        .content-grid {
-            grid-template-columns: 1fr;
-        }
-        .legend-sidebar {
-            margin-top: 2rem;
-        }
-    }
+    .team-stats-page h1 { color: #333; border-bottom: 2px solid #1abc9c; padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
+    .content-grid { display: grid; grid-template-columns: 3fr 1fr; gap: 2rem; }
+    .stats-table-container h2 { margin-top: 0; font-size: 1.2rem; color: #34495e; }
+    .table-wrapper { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; white-space: nowrap; }
+    th, td { text-align: left; padding: 0.7rem 0.5rem; border-bottom: 1px solid #ecf0f1; }
+    th { background-color: #f2f4f6; font-weight: 600; color: #555; position: sticky; top: 0; z-index: 1; }
+    tbody tr:hover { background-color: #f9f9f9; }
+    .team-link { color: #007bff; text-decoration: none; font-weight: 500; }
+    .team-link:hover { text-decoration: underline; }
+    
+    .legend-sidebar h2 { margin-top: 0; font-size: 1.2rem; color: #34495e; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; margin-bottom: 1rem; }
+    .legend-sidebar ul { list-style: none; padding: 0; font-size: 0.9rem; }
+    .legend-sidebar li { margin-bottom: 0.5rem; }
+    .legend-sidebar strong { color: #2c3e50; }
+    .error-message { color: #e74c3c; padding: 1rem; background-color: #fdeded; border: 1px solid #f5c6cb; border-radius: 4px; }
+    .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
 
 
     .sidebar-right {
@@ -266,20 +141,21 @@
         align-self: flex-start;
     }
 
-    .visualizations-container h2 {
-        margin-top: 0;
-        font-size: 1.2rem;
-        color: #34495e;
-        border-bottom: 1px solid #eee;
-        padding-bottom: 0.5rem;
-        margin-bottom: 1rem;
-    }
-    .chart-wrapper {
-        margin-bottom: 2rem;
+    .visualizations-container h2 { margin-top: 0; font-size: 1.2rem; color: #34495e; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
+    
+    .chart-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
     }
 
-    img {
-    max-width: 150%;
-    max-height: 150%;
+    .chart-item { position: relative; overflow: hidden; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); cursor: pointer; }
+    .chart-item img { display: block; width: 100%; height: auto; transition: transform 0.3s ease; }
+    .zoom-btn { position: absolute; top: 10px; right: 10px; background-color: rgba(0, 0, 0, 0.5); color: white; border: none; border-radius: 50%; width: 40px; height: 40px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background-color 0.3s ease; opacity: 0; }
+    .chart-item:hover .zoom-btn { opacity: 1; }
+    .zoom-btn:hover { background-color: rgba(0, 0, 0, 0.8); }
+
+    @media (max-width: 992px) {
+        .content-grid { grid-template-columns: 1fr; }
     }
 </style>

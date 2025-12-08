@@ -4,7 +4,7 @@
 <div class="app-container">
     <header>
         <nav class="navbar">
-            <a href="/" class="nav-logo">⚽ Strona Główna</a>
+            <a href="/" class="nav-logo">Strona Główna</a>
             <ul class="nav-links">
                 <li><a href="/matches" class="nav-item">Mecze</a></li>
                 <li><a href="/season-stats/" class="nav-item">Statystyki drużyn</a></li>

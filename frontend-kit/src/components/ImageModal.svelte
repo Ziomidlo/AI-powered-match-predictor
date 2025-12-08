@@ -1,5 +1,5 @@
 <script>
-    import {createEventDispatcher, onMount, onDestroy} from 'svelte';
+    import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 
     export let imageSrc = '';
     export let imageAlt = 'Powiększona wizualizacja';
@@ -7,7 +7,7 @@
     const dispatch = createEventDispatcher();
 
     function closeModal() {
-        dispatch(close)
+        dispatch('close');
     }
 
     function handleKeydown(event) {
@@ -16,26 +16,17 @@
         }
     }
 
-    onMount(() => {
-        window.addEventListener('keydown', handleKeydown);
-
-    });
-
-    onDestroy(() => {
-        window.removeEventListener('keydown', handleKeydown);
-    })
 </script>
 
 <svelte:window on:keydown={handleKeydown}/>
 
-<div class="modal-backrop" on:click={closeModal}>
+<div class="modal-backdrop" on:click={closeModal}>
     <div class="modal-content" on:click|stopPropagation>
        <button class="close-button" on:click={closeModal} title="Zamknij (Esc)">
             &times;
         </button>
         <img src={imageSrc} alt={imageAlt} class="modal-image"/>
     </div>
-
 </div>
 
 <style>

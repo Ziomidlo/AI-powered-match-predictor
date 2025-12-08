@@ -1,0 +1,51 @@
+@startuml
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+hide empty members
+
+
+class Team {
+  + {PK} id: Integer
+  --
+  + team_name: String
+  + venue: String
+}
+
+
+class PredictedMatch {
+  + {PK} id: Integer
+  --
+  + is_predicted: Boolean
+  + home_win_probability_lr: Float
+  + draw_probability_lr: Float
+  + away_win_probability_lr: Float
+  + home_win_probability_rfc: Float
+  + draw_probability_rfc: Float
+  + away_win_probability_rfc: Float
+  + home_win_probability_xgb: Float
+  + draw_probability_xgb: Float
+  + away_win_probability_xgb: Float
+  + home_win_probability_svc: Float
+  + draw_probability_svc: Float
+  + away_win_probability_svc: Float
+  + home_expected_goals_lr: Float
+  + away_expected_goals_lr: Float
+  + home_expected_goals_rfr: Float
+  + away_expected_goals_rfr: Float
+  + home_expected_goals_xgb: Float
+  + away_expected_goals_xgb: Float
+  + home_expected_goals_svr: Float
+  + away_expected_goals_svr: Float
+  --
+  # {FK} home_team_id: Integer
+  # {FK} away_team_id: Integer
+}
+
+
+' --- Definicja Relacji ---
+
+
+Team "1" -- "0..*" PredictedMatch : (home_team)
+Team "1" -- "0..*" PredictedMatch : (away_team)
+
+@enduml

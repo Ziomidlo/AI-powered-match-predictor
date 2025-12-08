@@ -1,0 +1,90 @@
+@startuml
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+hide empty members
+
+class Season {
+  + {PK} id: Integer
+  --
+  + season: String
+}
+
+class Team {
+  + {PK} id: Integer
+  --
+  + team_name: String
+  + venue: String
+}
+
+class Match {
+  + {PK} id: Integer
+  --
+  + match_date: String
+  + result_numeric: Integer
+  + home_goals: Integer
+  + away_goals: Integer
+  + home_xG: Float
+  + away_xG: Float
+  --
+  # {FK} season_id: Integer
+  # {FK} home_team_id: Integer
+  # {FK} away_team_id: Integer
+}
+
+
+class SeasonStats {
+  + {PK} id: Integer
+  --
+  + shots: Float
+  + shots_on_target: Float
+  + free_kicks: Float
+  + penalty_goals: Float
+  + passes_completed: Float
+  + passes_attempted: Float
+  + pass_completion: Float
+  + corners: Float
+  + yellow_cards: Float
+  + red_cards: Float
+  + fouls_conceded: Float
+  + penalties_conceded: Float
+  + own_goals: Float
+  --
+  # {FK} season_id: Integer
+  # {FK} team_id: Integer
+}
+
+class LearningFeature {
+  + {PK} id: Integer
+  --
+  + goals_per_match: Float
+  + offensive_strength: Float
+  + goals_conceded_per_match: Float
+  + defense_strength: Float
+  + effective_possession: Float
+  + passing_and_control_strength: Float
+  + penalties_converted_rate: Float
+  + set_piece_strength: Float
+  + team_power_index: Float
+  + avg_position: Float
+  + avg_points: Float
+  --
+  # {FK} season_id: Integer
+  # {FK} team_id: Integer
+}
+
+
+' --- Definicja Relacji ---
+
+Team "1" -- "0..*" Match : (home_team)
+Team "1" -- "0..*" Match : (away_team)
+Season "1" -- "0..*" Match
+
+
+Team "1" -- "0..*" SeasonStats
+Season "1" -- "0..*" SeasonStats
+
+Team "1" -- "0..*" LearningFeature
+Season "1" -- "0..*" LearningFeature
+
+
+@enduml

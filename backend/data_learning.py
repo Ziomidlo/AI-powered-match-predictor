@@ -12,6 +12,8 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 import scipy.stats as stats
 from sklearn.svm import SVC, SVR
 from xgboost import XGBClassifier, XGBRegressor
+import os
+import joblib
 
 trained_ml_models = {}
 
@@ -580,8 +582,69 @@ def train_models():
 
    predicted_matches_df.to_csv(cleaned_data_folder + "PredictedUpcomingMatches.csv", index=False)
 
+   #Evaluation of models
 
-   #Visualization
+   models_directory = "trained_models"
+   os.makedirs(models_directory, exist_ok=True)
+
+   for model_name, model_pipeline in trained_ml_models.items():
+      file_path = os.path.join(models_directory, f"{model_name}.joblib")
+      joblib.dump(model_pipeline, file_path)
+      print(f"Zapisano model: {file_path}")
+
+
+   all_results = []
+
+   for model_name, model_pipeline in trained_ml_models.items():
+      print(f"Ewaluacja modelu: {model_name}")
+
+      if 'classifier' in model_name:
+
+         y_pred_labels = model_pipeline.predict(X_test)
+
+         if 'xgboost' in model_name:
+            y_true_transformed = y_test + 1
+            accuracy = accuracy_score(y_true_transformed, y_pred_labels)      
+         else:
+            accuracy = accuracy_score(y_test, y_pred_labels)
+
+         all_results.append({
+               'model_name': model_name,
+               'model_type': 'classifier',
+               'metric': 'accuracy',
+               'value': accuracy
+         })
+
+      elif 'regressor_home' in model_name:
+         y_pred_home = model_pipeline.predict(X_test_home)
+         
+         mse = mean_squared_error(y_test_home, y_pred_home)
+         mae = mean_absolute_error(y_test_home, y_pred_home)
+         
+         all_results.extend([
+               {'model_name': model_name, 'model_type': 'regressor_home', 'metric': 'mse', 'value': mse},
+               {'model_name': model_name, 'model_type': 'regressor_home', 'metric': 'mae', 'value': mae}
+         ])
+
+      elif 'regressor_away' in model_name:
+         y_pred_away = model_pipeline.predict(X_test_away)
+
+         mse = mean_squared_error(y_test_away, y_pred_away)
+         mae = mean_absolute_error(y_test_away, y_pred_away)
+
+         all_results.extend([
+               {'model_name': model_name, 'model_type': 'regressor_away', 'metric': 'mse', 'value': mse},
+               {'model_name': model_name, 'model_type': 'regressor_away', 'metric': 'mae', 'value': mae}
+         ])
+
+
+   results_df = pd.DataFrame(all_results)
+   results_df.to_csv("all_model_results.csv", index=False)
+
+   print("Zebrano i zapisano wyniki ewaluacji wszystkich modeli.")
+
+
+   #Visualizations
 
    h2hHomeWins = merged_matches['h2h_home_wins'].sum()
    h2hAwayWins = merged_matches['h2h_away_wins'].sum()
@@ -756,5 +819,62 @@ def train_models():
    plt.xticks(rotation=90)
    plt.tight_layout()
    plt.savefig(visualization_folder + "Barplot of Average Position Overall by Team")
+
+   classifiers_df = results_df[results_df['model_type'] == 'classifier'].copy()
+
+   plt.figure(figsize=(12, 8))
+   barplot_acc = sns.barplot(
+      x='value', 
+      y='model_name', 
+      data=classifiers_df.sort_values('value', ascending=False)
+   )
+
+   barplot_acc.bar_label(barplot_acc.containers[0], fmt='%.4f', padding=5)
+
+   plt.title('Porównanie Dokładności (Accuracy) Modeli Klasyfikacyjnych', fontsize=18, weight='bold')
+   plt.xlabel('Dokładność (Accuracy)', fontsize=14)
+   plt.ylabel('Model', fontsize=14)
+   plt.xlim(0, 0.75)
+   plt.tight_layout()
+   plt.savefig(visualization_folder + 'Classifier comparison scheme', dpi=300)
+
+
+   regressors_df = results_df[results_df['model_type'].str.contains('regressor')].copy()
+
+   mae_df = regressors_df[regressors_df['metric'] == 'mae']
+   plt.figure(figsize=(12, 8))
+   barplot_mae = sns.barplot(
+      x='value', 
+      y='model_name', 
+      data=mae_df.sort_values('value', ascending=True),
+      palette='magma'
+   )
+   for container in barplot_mae.containers:
+      barplot_mae.bar_label(container, fmt='%.4f', padding=5)
+
+   plt.title('Porównanie Średniego Błędu Absolutnego (MAE) Modeli Regresyjnych', fontsize=18, weight='bold')
+   plt.xlabel('MAE', fontsize=14)
+   plt.ylabel('Model', fontsize=14)
+   plt.tight_layout()
+   plt.savefig(visualization_folder + 'Regressor MAE comparison scheme', dpi=300)
+
+
+   mse_df = regressors_df[regressors_df['metric'] == 'mse']
+   plt.figure(figsize=(12, 8))
+   barplot_mse = sns.barplot(
+      x='value', 
+      y='model_name', 
+      data=mse_df.sort_values('value', ascending=True),
+      palette='magma'
+   )
+   for container in barplot_mse.containers:
+      barplot_mse.bar_label(container, fmt='%.4f', padding=5)
+   plt.title('Porównanie Średniego Błędu Kwadratowego (MSE) Modeli Regresyjnych', fontsize=18, weight='bold')
+   plt.xlabel('MSE', fontsize=14)
+   plt.ylabel('Model', fontsize=14)
+   plt.tight_layout()
+   plt.savefig(visualization_folder + 'Regressor MSE comparison scheme', dpi=300)
+
+
 
 train_models()
