@@ -15,6 +15,7 @@ from xgboost import XGBClassifier, XGBRegressor
 import os
 import joblib
 
+
 trained_ml_models = {}
 
 TRAINING_FEATURE_COLUMNS= ['home_xG_avg', 'away_xG_avg','goal_diff_delta', 'home_team_strength', 'away_team_strength', 
@@ -26,7 +27,7 @@ TRAINING_FEATURE_COLUMNS= ['home_xG_avg', 'away_xG_avg','goal_diff_delta', 'home
 
 def train_models():
    
-   global trained_ml_models
+   local_models_registery = {}
 
    cleaned_data_folder = "cleaned_data/"
    visualization_folder = "visualizations/"
@@ -101,7 +102,7 @@ def train_models():
    print("Classification Report: ", classification_report(y_test, y_pred))
    print("Confusion Matrix: ", confusion_matrix(y_test, y_pred))
 
-   trained_ml_models['logistic_regression_classifier'] = model
+   local_models_registery['logistic_regression_classifier'] = model
 
    #Random Forest Classifier Tuning
    def randomForestClassifierTuning():
@@ -152,7 +153,7 @@ def train_models():
    print("Classification Report:\n", classification_report(y_test, y_pred_rf))
    print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred_rf))
 
-   trained_ml_models['random_forest_classifier'] = rf_model
+   local_models_registery['random_forest_classifier'] = rf_model
 
    #XGBoost Classifier
 
@@ -202,7 +203,7 @@ def train_models():
    print("Classificaion Report:\n", classification_report(y_xgb_test, y_pred_xgb))
    print("Confusion Matrix: ", confusion_matrix(y_xgb_test, y_pred_xgb))
 
-   trained_ml_models['xgboost_classifier'] = pipeline_xgb_classifier
+   local_models_registery['xgboost_classifier'] = pipeline_xgb_classifier
    
    #Support Vector Machine (SVC)
    def svc_classifier_tuning():
@@ -245,7 +246,7 @@ def train_models():
    print("Classificaion Report:\n", classification_report(y_test, y_pred_svc))
    print("Confusion Matrix: ", confusion_matrix(y_test, y_pred_svc))
 
-   trained_ml_models['support_vector_classifier'] = pipeline_svc_classifier
+   local_models_registery['support_vector_classifier'] = pipeline_svc_classifier
 
    #Linear Regression (Ridge)
 
@@ -282,8 +283,8 @@ def train_models():
    print("MAE:", mean_absolute_error(y_test_away, y_pred_away))
    print("MSE:", mean_squared_error(y_test_away, y_pred_away))
 
-   trained_ml_models['linear_regressor_home'] = home_goals_model
-   trained_ml_models['linear_regressor_away'] = away_goals_model
+   local_models_registery['linear_regressor_home'] = home_goals_model
+   local_models_registery['linear_regressor_away'] = away_goals_model
 
 
    #Random Forest Regressor Tuning
@@ -368,8 +369,8 @@ def train_models():
    print("MAE:", mean_absolute_error(y_test_away, y_pred_away_rf))
    print("MSE:", mean_squared_error(y_test_away, y_pred_away_rf))
 
-   trained_ml_models['random_forest_regressor_home'] = home_goals_rf
-   trained_ml_models['random_forest_regressor_away'] = away_goals_rf
+   local_models_registery['random_forest_regressor_home'] = home_goals_rf
+   local_models_registery['random_forest_regressor_away'] = away_goals_rf
 
    #XGBoost Regressor
    def xgboost_regressor_tuning():
@@ -440,8 +441,8 @@ def train_models():
    print("MAE:", mean_absolute_error(y_test_away, y_pred_away_xgb))
    print("MSE:", mean_squared_error(y_test_away, y_pred_away_xgb))
 
-   trained_ml_models['xgboost_regressor_home'] = home_goals_xgb
-   trained_ml_models['xgboost_regressor_away'] = away_goals_xgb
+   local_models_registery['xgboost_regressor_home'] = home_goals_xgb
+   local_models_registery['xgboost_regressor_away'] = away_goals_xgb
 
    #Support Vector Regressor (SVR)
 
@@ -522,8 +523,8 @@ def train_models():
    print("MAE:", mean_absolute_error(y_test_away, y_pred_away_svr))
    print("MSE:", mean_squared_error(y_test_away, y_pred_away_svr))
 
-   trained_ml_models['support_vector_regressor_home'] = home_goals_svr
-   trained_ml_models['support_vector_regressor_away'] = away_goals_svr
+   local_models_registery['support_vector_regressor_home'] = home_goals_svr
+   local_models_registery['support_vector_regressor_away'] = away_goals_svr
 
 
    #logisticRegressionTuning()
@@ -587,7 +588,7 @@ def train_models():
    models_directory = "trained_models"
    os.makedirs(models_directory, exist_ok=True)
 
-   for model_name, model_pipeline in trained_ml_models.items():
+   for model_name, model_pipeline in local_models_registery.items():
       file_path = os.path.join(models_directory, f"{model_name}.joblib")
       joblib.dump(model_pipeline, file_path)
       print(f"Zapisano model: {file_path}")
@@ -595,7 +596,7 @@ def train_models():
 
    all_results = []
 
-   for model_name, model_pipeline in trained_ml_models.items():
+   for model_name, model_pipeline in local_models_registery.items():
       print(f"Ewaluacja modelu: {model_name}")
 
       if 'classifier' in model_name:
@@ -875,6 +876,13 @@ def train_models():
    plt.tight_layout()
    plt.savefig(visualization_folder + 'Regressor MSE comparison scheme', dpi=300)
 
+   return local_models_registery
 
 
-train_models()
+
+if __name__ == "__main__":
+   print("Training models...")
+   models = train_models()
+
+   joblib.dump(models, "app_models.joblib")
+   print("Models saved to app_models.joblib")

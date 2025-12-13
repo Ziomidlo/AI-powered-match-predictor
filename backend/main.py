@@ -2,25 +2,33 @@ from typing import List
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
+import os, joblib
 #from data_to_db import data_to_db
 from models import Base, Team as DBTeam
 from database import engine, get_db
 from contextlib import asynccontextmanager
 #from data_processing import run_data_process
-from data_learning import train_models
 from schemas import Season, League, LearningFeature, PredictedMatch, PredictedMatchOut, SeasonStats, Team, Match, PredictedMatchCreate, PredictedMatchPredictionResult
 from sqlalchemy.orm import Session
 from crud import get_seasons, get_season, get_learning_features, get_learning_features_for_team, get_predicted_match, get_predicted_matches, get_season_stats_for_team, get_team, get_teams, get_matches, get_match, get_league_table, get_season_stats, create_empty_prediction_match, delete_predicted_match, get_matches_by_season
 from prediction_service import generate_and_store_match_prediction
 from models import PredictedMatch as PredictedMatchDB
+from data_learning import trained_ml_models
 
+MODEL_ARTIFACT_PATH = "app_models.joblib"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    #run_data_process()
-    train_models()
-    #data_to_db()
+    if os.path.exists(MODEL_ARTIFACT_PATH):
+        print(f"LOADING: Found a trained models in {MODEL_ARTIFACT_PATH}...")
+        loaded_models = joblib.load(MODEL_ARTIFACT_PATH)
+        trained_ml_models.update(loaded_models)
+        print("SYSTEM READY: Models are loaded to RAM memory")
+    else:
+        print("CRITICAL WARNING: .joblib file has not been found.")
+        print("Please use a commend 'python data_learning.py' by yourself to get models trained")
     yield
+    print("Shutting down...")
 
 app = FastAPI(lifespan=lifespan)
 
