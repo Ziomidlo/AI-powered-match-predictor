@@ -23,8 +23,27 @@ jobs:
             - name: Install dependencies
               run: |
                 python -m pip install --upgrade pip
+                pip install gdown
                 if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
             
+            - name: Download Data from Google Drive
+              run: |
+                mkdir -p backend/cleaned_data
+                gdown --id 1evMCKMbBKb44TdJYy6WdfaDOpoe2SHP0 -O backend/cleaned_data/FullMergedMatchesInfo.csv
+                gdown --id 1n9lt5jswM-FFeIaJ0hoQCpsZNHFZD4uv -O backend/cleaned_data/FullMergedSeasonStats.csv
+                gdown --id 1CjDITdii7JI-vdmdAHK8HavEEDnSQepg -O backend/cleaned_data/LearningMatchesData.csv
+                gdown --id 13TC8WC3exY45MLr7xoup6Sx_sb2pNwiY -O backend/cleaned_data/LearningSeasonStatsData.csv
+                gdown --id 1Q2VdsaIVJ3xmei0nm4Tog6DNZNYzs9Ri -O backend/cleaned_data/LearningUpcomingMatches.csv
+                gdown --id 1aKlm3Sy2vyT1jgIodQGkR_EFCHR8QEHs -O backend/cleaned_data/matches.csv
+                gdown --id 1HbjR40QRGoPSVu3Hdg3kHnYeyuUcMAYn -O backend/cleaned_data/mergedMatches.csv
+                gdown --id 1SC2mONLi0z1AnereVaydLZ31CefaK_Ar -O backend/cleaned_data/past-matches.csv
+                gdown --id 1kipE1F0ENnxXSPEi35tTFh9W64M2i0sc -O backend/cleaned_data/PredictedUpcomingMatches.csv
+                gdown --id 19VfElTtQqKUMhOpsUkoPc_Rv7LYH_bZV -O backend/cleaned_data/season-stats.csv
+                gdown --id 10F20x_kjouYfruJqodx9oFfwZ236L__d -O backend/cleaned_data/seasons.csv
+                gdown --id 1QWvsKaJxTv65bDkmQlwEhl7lq0tOoZfQ -O backend/cleaned_data/teams.csv
+                
+                ls -la backend/cleaned_data
+
             - name: Train Models (Generate Artifacts)
               run: |
                 cd backend
