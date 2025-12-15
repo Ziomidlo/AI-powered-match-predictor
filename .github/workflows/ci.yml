@@ -47,6 +47,7 @@ jobs:
             - name: Train Models (Generate Artifacts)
               run: |
                 cd backend
+                mkdir -p visualizations
                 python data_learning.py
                 ls -la trained_models/
 

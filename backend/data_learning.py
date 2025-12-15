@@ -664,6 +664,7 @@ def train_models():
    plt.title("Distribution of Match Results")
    plt.tight_layout()
    plt.savefig(visualization_folder + "Bar chart of Match Result Distribution")
+   plt.close
 
 
    plt.figure(figsize=(12, 6))
@@ -673,6 +674,7 @@ def train_models():
    plt.title("Distribution of Goal Difference Delta")
    plt.tight_layout()
    plt.savefig(visualization_folder + "Histogram of Goal Difference")
+   plt.close
 
    plt.figure(figsize=(12, 6))
    sns.boxplot(x=merged_matches["h2h_home_wins"], y=merged_matches['result_numeric'])
@@ -681,6 +683,7 @@ def train_models():
    plt.ylabel("Match Result")
    plt.tight_layout()
    plt.savefig(visualization_folder + "Boxplot of H2H Home Wins and Match Result")
+   plt.close
 
    plt.figure(figsize=(12, 6))
    sns.boxplot(x=merged_matches["h2h_away_wins"], y=merged_matches['result_numeric'])
@@ -689,6 +692,7 @@ def train_models():
    plt.ylabel("Match Result")
    plt.tight_layout()
    plt.savefig(visualization_folder + "Boxplot of H2H Away Wins and Match Result")
+   plt.close
 
    plt.figure(figsize=(12, 6))
    sns.boxplot(x=merged_matches["h2h_draws"], y=merged_matches['result_numeric'])
@@ -697,6 +701,7 @@ def train_models():
    plt.ylabel("Match Result")
    plt.tight_layout()
    plt.savefig(visualization_folder + "Boxplot of H2H draws and Match Result")
+   plt.close
 
    plt.figure(figsize=(12, 6))
    sns.boxplot(x=merged_matches["h2h_home_goals"], y=merged_matches['result_numeric'])
@@ -705,6 +710,7 @@ def train_models():
    plt.ylabel("Match Result")
    plt.tight_layout()
    plt.savefig(visualization_folder + "Boxplot of H2H Home Goals and Match Result")
+   plt.close
 
    plt.figure(figsize=(12, 6))
    sns.boxplot(x=merged_matches["h2h_away_goals"], y=merged_matches['result_numeric'])
@@ -713,6 +719,7 @@ def train_models():
    plt.ylabel("Match Result")
    plt.tight_layout()
    plt.savefig(visualization_folder + "Boxplot of H2H Away Goals and Match Result")
+   plt.close
 
 
    plt.figure(figsize=(6,6))
@@ -720,6 +727,7 @@ def train_models():
    plt.title('Head-to-Head Results')
    plt.tight_layout()
    plt.savefig(visualization_folder + "Pie chart of H2H Results")
+   plt.close
 
 
    plt.figure(figsize=(12, 6))
@@ -729,6 +737,7 @@ def train_models():
    plt.xticks(rotation=90)
    plt.tight_layout()
    plt.savefig(visualization_folder + "Bar plot of Goals Scored per Match by Season")
+   plt.close
 
    plt.figure(figsize=(12, 6))
    sns.barplot(data=season_stats, x="Team", y="shots_on_target_per_goal", hue="Season")
@@ -737,6 +746,7 @@ def train_models():
    plt.xticks(rotation=90)
    plt.tight_layout()
    plt.savefig(visualization_folder + "Bar plot of Shots on Target per Goal Across Seasons")
+   plt.close
 
 
    plt.figure(figsize=(12, 6))
@@ -746,6 +756,7 @@ def train_models():
    plt.xticks(rotation=90)
    plt.tight_layout()
    plt.savefig(visualization_folder + "Bar plot of Goals Conceded per Match by Season")
+   plt.close
 
 
    plt.figure(figsize=(10, 8))
@@ -759,6 +770,7 @@ def train_models():
    plt.title("Correlation Between Season stats")
    plt.tight_layout()
    plt.savefig(visualization_folder + "Heatmap of correlation between Season stats")
+   plt.close
 
    plt.figure(figsize=(10, 8))
    offensive_features = season_stats[["shots_on_target_per_goal", "shots_per_goal", "sot_ratio", "goals_per_match", 'offensive_strength', 'team_power_index']]
@@ -766,6 +778,7 @@ def train_models():
    plt.title("Correlation Between Offensive Metrics")
    plt.tight_layout()
    plt.savefig(visualization_folder + "Heatmap of correlation between offensive metrics And Team Power Index")
+   plt.close
 
    plt.figure(figsize=(10, 8))
    defensive_feature = season_stats[["goals_conceded_per_match", "fouls_per_match", "cards_ratio", "own_goals_ratio", "defense_strength", 'team_power_index']]
@@ -773,6 +786,7 @@ def train_models():
    plt.title("Correlation Between Defensive Metrics")
    plt.tight_layout()
    plt.savefig(visualization_folder + "Heatmap of correlation between Defensive metrics And Team Power Index")
+   plt.close
 
    plt.figure(figsize=(10, 8))
    passing_control_feature = season_stats[['pass_accuracy', 'passes_per_game', 'effective_possesion', 'passing_and_control_strength', 'team_power_index']]
@@ -780,6 +794,7 @@ def train_models():
    plt.title("Correlation Between Passing & Control Metrics")
    plt.tight_layout()
    plt.savefig(visualization_folder + "Heatmap of correlation between Passing & Control metrics And Team Power Index")
+   plt.close
 
    plt.figure(figsize=(10, 8))
    set_piece_feature = season_stats[['corners_per_match', 'free_kicks_per_match', 'penalties_converted_rate', 'set_piece_strength', 'team_power_index']]
@@ -787,6 +802,7 @@ def train_models():
    plt.title("Correlation Between Set Piece Metrics")
    plt.tight_layout()
    plt.savefig(visualization_folder + "Heatmap of correlation between Set Piece metrics And Team Power Index")
+   plt.close
 
    plt.figure(figsize=(12, 6))
    sns.barplot(data=season_stats, x="Team", y="weight_points")
@@ -795,6 +811,7 @@ def train_models():
    plt.xticks(rotation=90)
    plt.tight_layout()
    plt.savefig(visualization_folder + "Barplot of Weight Points by Team")
+   plt.close
 
 
    plt.figure(figsize=(12, 6))
@@ -804,6 +821,7 @@ def train_models():
    plt.xticks(rotation=90)
    plt.tight_layout()
    plt.savefig(visualization_folder + "Barplot of Team Power Index")
+   plt.close
 
    plt.figure(figsize=(12, 6))
    sns.barplot(data=season_stats, x="Team", y="avg_points_per_game")
@@ -812,6 +830,7 @@ def train_models():
    plt.xticks(rotation=90)
    plt.tight_layout()
    plt.savefig(visualization_folder + "Barplot of Average Points Per Game by Team")
+   plt.close
 
    plt.figure(figsize=(12, 6))
    sns.barplot(data=season_stats, x="Team", y="avg_position_ovr")
@@ -820,6 +839,7 @@ def train_models():
    plt.xticks(rotation=90)
    plt.tight_layout()
    plt.savefig(visualization_folder + "Barplot of Average Position Overall by Team")
+   plt.close
 
    classifiers_df = results_df[results_df['model_type'] == 'classifier'].copy()
 
@@ -838,6 +858,7 @@ def train_models():
    plt.xlim(0, 0.75)
    plt.tight_layout()
    plt.savefig(visualization_folder + 'Classifier comparison scheme', dpi=300)
+   plt.close
 
 
    regressors_df = results_df[results_df['model_type'].str.contains('regressor')].copy()
@@ -858,6 +879,7 @@ def train_models():
    plt.ylabel('Model', fontsize=14)
    plt.tight_layout()
    plt.savefig(visualization_folder + 'Regressor MAE comparison scheme', dpi=300)
+   plt.close
 
 
    mse_df = regressors_df[regressors_df['metric'] == 'mse']
@@ -875,6 +897,7 @@ def train_models():
    plt.ylabel('Model', fontsize=14)
    plt.tight_layout()
    plt.savefig(visualization_folder + 'Regressor MSE comparison scheme', dpi=300)
+   plt.close
 
    return local_models_registery
 
