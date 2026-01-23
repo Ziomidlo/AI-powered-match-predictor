@@ -6,13 +6,22 @@ from dotenv import load_dotenv
 import pandas as pd
 import requests
 from sqlalchemy.orm import Session
+from backend.features import FeatureEngineer
+from backend.match_repository import MatchRepository
+from backend.stats_repository import TeamStatsRepository
 from models import Season, Team
 from database import SessionLocal
+from api_adapter import ApiAdapter
+
+class KaggleAdapter:
+   def __init__(self, filepath):
+      self.raw_df = pd.read_csv(filepath)
 
 
 def run_data_process():
    load_dotenv()
    API_KEY = os.getenv("API_KEY")
+   TEAM_CSV_PATH = "cleaned_data/teams.csv"
 
    uri = "https://api.football-data.org/v4/competitions/PL/"
    matches = "/matches"
@@ -28,19 +37,19 @@ def run_data_process():
    data_finished = response.json()
 
 
-   with open(json_data_folder + 'dataPLMatches2024Finished.json', 'w') as file:
+   with open(json_data_folder + 'dataPLMatchesFinished.json', 'w') as file:
       json.dump(data_finished, file)
 
-   with open(json_data_folder + 'dataPLMatches2024Finished.json', 'r') as file:
+   with open(json_data_folder + 'dataPLMatchesFinished.json', 'r') as file:
       data_finished = json.load(file)
 
    response_upcoming = requests.get(uri + upcoming_matches, headers=headers)
    data_upcoming = response_upcoming.json()
 
-   with open(json_data_folder +'dataPLMatches2024Upcoming.json', 'w') as file:
+   with open(json_data_folder +'dataPLMatchesUpcoming.json', 'w') as file:
       json.dump(data_upcoming, file)
 
-   with open(json_data_folder + 'dataPLMatches2024Upcoming.json', 'r') as file:
+   with open(json_data_folder + 'dataPLMatchesUpcoming.json', 'r') as file:
       data_upcoming = json.load(file)
    
    response_team = requests.get(uri + standings, headers=headers)
@@ -53,128 +62,32 @@ def run_data_process():
 
       #Data definition
 
+
    finished_matches = data_finished['matches']
    upcoming_matches = data_upcoming['matches']
    team_standings = data_team['standings'][0]['table']
    past_matches = pd.read_csv(cleaned_data_folder + 'past-matches.csv')
-   past_seasons_stats = pd.read_csv(cleaned_data_folder + 'season-stats.csv')
-   teams = pd.read_csv(cleaned_data_folder + 'teams.csv') 
+   adapter = ApiAdapter(api_json_matches= finished_matches, api_json_upcoming_matches= upcoming_matches, api_json_standings= team_standings, teams_csv_path=TEAM_CSV_PATH)
+   match_repo = MatchRepository(cleaned_data_folder + 'mergedMatches.csv')
+   stats_repo = TeamStatsRepository(cleaned_data_folder + 'FullMergedSeasonStats.csv')
+   feature_engineer = FeatureEngineer(stats_repository=stats_repo)
 
    #Data Structuring & cleaning for missing values from API
 
-   structured_current_season_matches = []
-   structured_last_season_matches = []
-   structured_scheduled_season_matches = []
-   structured_team_standings = {}
-   structured_past_seasons = {}
-
-
-   team_mapping = dict(zip(teams['Team'], teams['Id']))
-   team_venues = dict(zip(teams['Team'], teams['Venue']))
-
-   for team in team_standings:
-      team_name = team["team"]["name"]
-      team_id = team_mapping.get(team_name, -1)
-      structured_team_standings[team_name] = {
-         "Season" : "2024/2025",
-         "Team Id" : team_id,
-         "Position": team["position"],
-         "GP": team["playedGames"],
-         "W": team["won"],
-         "D": team["draw"],
-         "L": team["lost"],
-         "GF": team["goalsFor"],
-         "GA": team["goalsAgainst"],
-         "GD": team["goalDifference"],
-         "Pts": team["points"]
-      }
-
-   for match in finished_matches:
-
-      home_score = match["score"]["fullTime"].get("home", None)
-      away_score = match["score"]["fullTime"].get("away", None)
-      home_team = match["homeTeam"]["name"]
-      away_team = match["awayTeam"]["name"]
-      venue = team_venues.get(home_team, -1)
-      home_team_id = team_mapping.get(home_team, -1)
-      away_team_id = team_mapping.get(away_team, -1)
-      match_date = datetime.strptime(match["utcDate"], '%Y-%m-%dT%H:%M:%SZ')
-      goal_diff = None if home_score is None or away_score is None else (home_score - away_score)
-      season = "2024/2025"
-      
-      if home_score is None or away_score is None:
-         result = "Unknown"
-      elif home_score > away_score:
-         result = "Home win"
-      elif home_score < away_score:
-         result = "Away win"
-      else:
-         result = "Draw"
-
-      structured_current_season_matches.append({
-         "Season": season,
-         "Date": match_date,
-         "Home Id" : home_team_id,
-         "Home": home_team,
-         "Away Id" : away_team_id,
-         "Away": away_team,
-         "Home Goals": home_score,
-         "Away Goals": away_score,
-         "Result": result,
-         "Venue" : venue,
-         "Match": match["status"],
-         "GD": goal_diff
-      })
-
-   for match in upcoming_matches:
-      home_team = match['homeTeam']['name']
-      away_team = match['awayTeam']['name']
-      home_team_id = team_mapping.get(home_team, -1)
-      away_team_id = team_mapping.get(away_team, -1)
-      match_date = datetime.strptime(match["utcDate"], '%Y-%m-%dT%H:%M:%SZ') 
-      venue = team_venues.get(home_team, -1)
-      
-      structured_scheduled_season_matches.append({
-         "Season":"2024/2025",
-         "Date": match_date,
-         "Home Id": home_team_id,
-         "Home": home_team,
-         "Away Id": away_team_id,
-         "Away": away_team,
-         "Venue" : venue
-      })
+   df_matches = adapter.get_match_data()
+   df_upcoming_matches = adapter.get_upcoming_match_data()
+   df_standings = adapter.get_standings()
 
    #Creating Data Frames & Analysis
 
-   missing_columns = ['Sh', 'SoT', 'FK', 'PK', 'Cmp', 'Att', 'Cmp%', 'CK', 'CrdY', 'CrdR', 'Fls', 'PKcon', 'OG']
-   team_average_stats = past_seasons_stats.groupby("Team").mean(numeric_only=True).__round__(2)
-   season_2023 = past_seasons_stats[past_seasons_stats['Season'] == "2023/2024"]
-   bottom_five_teams = season_2023.sort_values("Position", ascending=False).head(5)
-   bottom_five_avg_stats = bottom_five_teams[missing_columns].mean(numeric_only=True) 
 
-   upcoming_matches = pd.DataFrame(structured_scheduled_season_matches)
-   upcoming_matches['Date'] = upcoming_matches['Date'].astype(object)
-   team_standings_df = pd.DataFrame.from_dict(structured_team_standings, orient="index").reset_index()
-   team_standings_df = team_standings_df.rename(columns={'index': 'Team'})
+   df_upcoming_matches['Date'] = df_upcoming_matches['Date'].astype(object)
 
-   for col in missing_columns:
-      team_standings_df[col] = team_standings_df.apply(
-         lambda row: team_average_stats.loc[row['Team'], col] 
-         if row['Team'] in team_average_stats.index else bottom_five_avg_stats[col],
-         axis=1
-      )
-   #print(df.head())
-
-
-   current_matches_df = pd.DataFrame(structured_current_season_matches)
-   current_matches_df = current_matches_df.sort_values(by='Date', ascending=False)
-   #print(df2.head())
-   current_matches_df.info()
-   current_matches_df.isnull().sum()
-   current_matches_df.nunique()
-   current_matches_df.describe()
-   current_matches_df['xG'] = current_matches_df.groupby('Home')['Home Goals'].transform(lambda x: x.rolling(5, min_periods=1).mean())
-   current_matches_df['xG.1'] = current_matches_df.groupby('Away')['Away Goals'].transform(lambda x: x.rolling(5, min_periods=1).mean())
+   df_matches = df_matches.sort_values(by='Date', ascending=False)
+   df_matches.info()
+   df_matches.isnull().sum()
+   df_matches.nunique()
+   df_matches.describe()
 
 
    print(past_matches.head())
@@ -183,7 +96,9 @@ def run_data_process():
    past_matches.nunique()
    past_matches.describe()
 
-   merged_season_stats = pd.concat([team_standings_df, past_seasons_stats], ignore_index=True)
+   clean_season_stats = feature_engineer.impute_stats(df_standings)
+
+   merged_season_stats = stats_repo.merge_and_update(clean_season_stats)
 
    merged_season_stats = merged_season_stats.sort_values(by='Season', ascending=False)
    print(merged_season_stats.head())
@@ -192,13 +107,8 @@ def run_data_process():
    merged_season_stats.nunique()
    merged_season_stats.describe()
 
-   venue_mapping = past_matches[['Home', 'Venue']].drop_duplicates()
-   print(venue_mapping)
 
-   merged_matches = pd.concat([current_matches_df, past_matches], ignore_index=True)
-   merged_matches['Match'] = merged_matches['Match'].fillna('FINISHED')
-   merged_matches['GD'] = merged_matches['GD'].fillna(merged_matches['Home Goals'] - merged_matches['Away Goals'])
-   merged_matches['result_numeric'] = merged_matches['Result'].map({"Home win" : 1, "Draw" : 0, "Away win" : -1})
+   merged_matches = match_repo.merge_and_update(df_matches)
 
    merged_matches['Date'] = pd.to_datetime(merged_matches['Date']).dt.date
    merged_matches.info()
@@ -207,11 +117,10 @@ def run_data_process():
    merged_matches.describe()
 
 
-   team_standings_df[missing_columns] = team_standings_df[missing_columns].round(2)
-   team_standings_df.info()
-   team_standings_df.isnull().sum()
-   team_standings_df.info()
-   team_standings_df.describe()
+   df_standings.info()
+   df_standings.isnull().sum()
+   df_standings.info()
+   df_standings.describe()
 
    merged_season_stats['GP'] = merged_season_stats['GP'].fillna(38.0)
    merged_season_stats.info()
@@ -219,22 +128,14 @@ def run_data_process():
    merged_season_stats.nunique()
    merged_season_stats.describe()
 
-   upcoming_matches.info()
-   upcoming_matches.isnull().sum()
-   upcoming_matches.nunique()
-   upcoming_matches.describe()
+   df_upcoming_matches.info()
+   df_upcoming_matches.isnull().sum()
+   df_upcoming_matches.nunique()
+   df_upcoming_matches.describe()
 
    #Feauture Engineering
 
-   season_weights = {
-      '2020/2021': 0.5,
-      '2021/2022': 0.75,
-      '2022/2023': 1.0,
-      '2023/2024': 1.25,
-      '2024/2025': 1.5
-   }
-
-   merged_season_stats['season_weight'] = merged_season_stats['Season'].map(season_weights)
+   merged_season_stats = feature_engineer.add_season_weights(merged_season_stats)
 
 
    def calculate_form(team, match_date, df):
