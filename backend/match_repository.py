@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 
 
 class MatchRepository:
@@ -9,8 +10,10 @@ class MatchRepository:
         pass
 
     def load_data(self):
-        if os.path.exists(self.file_path):           
-            return pd.read_csv(self.file_path, parse_dates=['Date'])
+        if os.path.exists(self.file_path):         
+            df = pd.read_csv(self.file_path, parse_dates=['Date']) 
+            df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+            return df
         else:
             print(f"File {self.file_path} not found. Returning empty DB.")
             return pd.DataFrame()
@@ -25,17 +28,44 @@ class MatchRepository:
 
     def merge_and_update(self, new_api_data):
         history_data = self.load_data()
-        if history_data.empty:
-            full_data = new_api_data
+        if not history_data.empty:
+            history_data['Date'] = pd.to_datetime(history_data['Date'])
+        if not new_api_data.empty:
+            new_api_data['Date'] = pd.to_datetime(new_api_data['Date'])
         else:
-            full_data = pd.concat([history_data, new_api_data], ignore_index=True)
+            return history_data
+        
+        cutoff_date = new_api_data['Date'].min()
+
+        if pd.isnull(cutoff_date):
+            print("Warning: New data has no valid dates")
+            return history_data
+        
+        print(f'Overwritting history from {cutoff_date} onwards...')
+
+        clean_history = history_data[history_data['Date'] < cutoff_date]
+
+        full_data = pd.concat([clean_history, new_api_data], ignore_index=True)
+        
+        full_data = full_data.sort_values(by='Date', ascending=True)
         full_data = full_data.drop_duplicates(
-            subset=['Date', 'Home', 'Away'],
-            keep='last'
+        subset=['Date', 'Home', 'Away'],
+        keep='last'
         )
 
         full_data['Status'] = full_data['Status'].fillna('FINISHED')
         full_data['GD'] = full_data['GD'].fillna(full_data['Home Goals'] - full_data['Away Goals'])
+
+        conditions = [
+            (full_data['Home Goals'].isna()) | (full_data['Away Goals'].isna()),
+            (full_data['Home Goals'] > full_data['Away Goals']),
+            (full_data['Home Goals'] < full_data['Away Goals'])
+        ]
+
+        choices = ['Unknown', 'Home win', 'Away win']
+
+        full_data['Result'] = np.select(conditions, choices, default='Draw')
+        
         if full_data['Result'].dtype == 'object':
             full_data['result_numeric'] = full_data['Result'].map({"Home win" : 1, "Draw" : 0, "Away win" : -1})
         else:

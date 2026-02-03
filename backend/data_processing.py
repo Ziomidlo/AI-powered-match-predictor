@@ -5,12 +5,9 @@ from sqlite3 import IntegrityError
 from dotenv import load_dotenv
 import pandas as pd
 import requests
-from sqlalchemy.orm import Session
-from backend.features import FeatureEngineer
-from backend.match_repository import MatchRepository
-from backend.stats_repository import TeamStatsRepository
-from models import Season, Team
-from database import SessionLocal
+from features import FeatureEngineer
+from match_repository import MatchRepository
+from stats_repository import TeamStatsRepository
 from api_adapter import ApiAdapter
 
 class KaggleAdapter:
@@ -26,7 +23,7 @@ def run_data_process():
    uri = "https://api.football-data.org/v4/competitions/PL/"
    matches = "/matches"
    finished_matches =  matches + "?status=FINISHED"
-   upcoming_matches = matches + "?status=SCHEDULED"
+   upcoming_matches = matches + "?status=SCHEDULED" or matches + "?status=TIMED"
    standings = "standings"
    cleaned_data_folder = "cleaned_data/"
    json_data_folder = "json_data/"
@@ -84,10 +81,17 @@ def run_data_process():
    df_upcoming_matches['Date'] = df_upcoming_matches['Date'].astype(object)
 
    df_matches = df_matches.sort_values(by='Date', ascending=False)
+   print(df_matches.head())
    df_matches.info()
    df_matches.isnull().sum()
    df_matches.nunique()
    df_matches.describe()
+
+   print(df_standings.head())
+   df_standings.info()
+   df_standings.isnull().sum()
+   df_standings.nunique()
+   df_standings.describe()
 
 
    print(past_matches.head())
@@ -98,15 +102,15 @@ def run_data_process():
 
    clean_season_stats = feature_engineer.impute_stats(df_standings)
 
+   clean_season_stats.info()
+   clean_season_stats.isnull().sum()
+   clean_season_stats.nunique()
+   clean_season_stats.describe()
+
    merged_season_stats = stats_repo.merge_and_update(clean_season_stats)
 
    merged_season_stats = merged_season_stats.sort_values(by='Season', ascending=False)
-   print(merged_season_stats.head())
-   merged_season_stats.info()
-   merged_season_stats.isnull().sum()
-   merged_season_stats.nunique()
-   merged_season_stats.describe()
-
+   merged_season_stats = feature_engineer.add_season_weights(merged_season_stats)
 
    merged_matches = match_repo.merge_and_update(df_matches)
 
@@ -116,12 +120,7 @@ def run_data_process():
    merged_matches.nunique()
    merged_matches.describe()
 
-
-   df_standings.info()
-   df_standings.isnull().sum()
-   df_standings.info()
-   df_standings.describe()
-
+   print(merged_season_stats.head())
    merged_season_stats['GP'] = merged_season_stats['GP'].fillna(38.0)
    merged_season_stats.info()
    merged_season_stats.isnull().sum()
@@ -134,8 +133,6 @@ def run_data_process():
    df_upcoming_matches.describe()
 
    #Feauture Engineering
-
-   merged_season_stats = feature_engineer.add_season_weights(merged_season_stats)
 
 
    def calculate_form(team, match_date, df):
@@ -420,7 +417,7 @@ def run_data_process():
 
    merged_matches.to_csv(cleaned_data_folder + "FullMergedMatchesInfo.csv")
    merged_season_stats.to_csv(cleaned_data_folder + "FullMergedSeasonStats.csv")
-   upcoming_matches = upcoming_matches_features(upcoming_matches, merged_matches, merged_season_stats)
+   upcoming_matches = upcoming_matches_features(df_upcoming_matches, merged_matches, merged_season_stats)
    upcoming_matches.to_csv(cleaned_data_folder + "LearningUpcomingMatches.csv")
 
    home_season_stats = merged_season_stats.copy()

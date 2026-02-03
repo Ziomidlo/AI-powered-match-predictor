@@ -1,6 +1,6 @@
 import pandas as pd
 
-from backend.stats_repository import TeamStatsRepository
+from stats_repository import TeamStatsRepository
 
 class FeatureEngineer:
 
@@ -41,6 +41,8 @@ class FeatureEngineer:
         promoted_profile = self.stats_repo.get_promoted_profile(self.MISSING_KAGLE_COLUMNS)
 
         for col in self.MISSING_KAGLE_COLUMNS:
+            if col not in new_data_df.columns:
+                new_data_df[col] = None
             def get_fill_value(team_name):
                 if team_name in team_averages.index:
                     return team_averages.loc[team_name, col]
@@ -49,9 +51,9 @@ class FeatureEngineer:
                 else:
                     return 0
                 
-        mask = new_data_df[col].isna()
-        if mask.any():
-            new_data_df.loc[mask, col] = new_data_df.loc[mask, 'Team'].apply(get_fill_value)
+            mask = new_data_df[col].isna()
+            if mask.any():
+                new_data_df.loc[mask, col] = new_data_df.loc[mask, 'Team'].apply(get_fill_value)
             
         return new_data_df
     

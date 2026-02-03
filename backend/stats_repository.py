@@ -31,7 +31,7 @@ class TeamStatsRepository:
             
             clean_df = self._filter_to_schema(df)
             clean_df.to_csv(self.file_path, index=False)
-            print("Data saved to path" + self.file_path)
+            print("Data saved to path " + self.file_path)
         else:
             print("No data to save.")
     
@@ -44,17 +44,25 @@ class TeamStatsRepository:
         if len(seasons) < 2:
             return None
         
-        teams_in_prev = set(df[df['Season'] == seasons[-2]]['Team'])
-        teams_in_curr = set(df[df['Season'] == seasons[-1]]['Team'])
+        if len(seasons) >= 3:
+            season_completed = seasons[-2]
+            season_before = seasons[-3]
+        else:
+            season_completed = seasons[-1]
+            season_before = seasons[-2]
 
-        promoted_teams = teams_in_curr - teams_in_prev
+
+        teams_in_completed = set(df[df['Season'] == season_completed]['Team'])
+        teams_in_before = set(df[df['Season'] == season_before]['Team'])
+
+        promoted_teams = teams_in_completed - teams_in_before
 
         if not promoted_teams:
             return None
 
         promoted_stats = df[
             (df['Team'].isin(promoted_teams)) &
-            (df['Season'] == seasons[-1])
+            (df['Season'] == season_completed)
         ]
 
         return promoted_stats[target_columns].mean(numeric_only=True)
