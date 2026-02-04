@@ -4,8 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import os, joblib
 #from data_to_db import data_to_db
-from models import Base, Team as DBTeam
-from database import engine, get_db
+from database import Base, engine, get_db
 from contextlib import asynccontextmanager
 #from data_processing import run_data_process
 from schemas import Season, League, LearningFeature, PredictedMatch, PredictedMatchOut, SeasonStats, Team, Match, PredictedMatchCreate, PredictedMatchPredictionResult

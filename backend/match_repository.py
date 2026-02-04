@@ -47,7 +47,7 @@ class MatchRepository:
 
         full_data = pd.concat([clean_history, new_api_data], ignore_index=True)
         
-        full_data = full_data.sort_values(by='Date', ascending=True)
+        full_data = full_data.sort_values(by='Date', ascending=False)
         full_data = full_data.drop_duplicates(
         subset=['Date', 'Home', 'Away'],
         keep='last'
