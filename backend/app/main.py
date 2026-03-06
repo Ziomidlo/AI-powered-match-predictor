@@ -4,17 +4,20 @@ from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import os, joblib
 #from data_to_db import data_to_db
-from database import Base, engine, get_db
+from app.database import Base, engine, get_db
 from contextlib import asynccontextmanager
 #from data_processing import run_data_process
-from schemas import Season, League, LearningFeature, PredictedMatch, PredictedMatchOut, SeasonStats, Team, Match, PredictedMatchCreate, PredictedMatchPredictionResult
+from app.schemas import Season, League, LearningFeature, PredictedMatch, PredictedMatchOut, SeasonStats, Team, Match, PredictedMatchCreate, PredictedMatchPredictionResult
 from sqlalchemy.orm import Session
-from crud import get_seasons, get_season, get_learning_features, get_learning_features_for_team, get_predicted_match, get_predicted_matches, get_season_stats_for_team, get_team, get_teams, get_matches, get_match, get_league_table, get_season_stats, create_empty_prediction_match, delete_predicted_match, get_matches_by_season
-from prediction_service import generate_and_store_match_prediction
-from models import PredictedMatch as PredictedMatchDB
-from data_learning import trained_ml_models
+from app.crud import trained_ml_models, get_seasons, get_season, get_learning_features, get_learning_features_for_team, get_predicted_match, get_predicted_matches, get_season_stats_for_team, get_team, get_teams, get_matches, get_match, get_league_table, get_season_stats, create_empty_prediction_match, delete_predicted_match, get_matches_by_season
+from app.prediction_service import generate_and_store_match_prediction
+from app.models import PredictedMatch as PredictedMatchDB
 
-MODEL_ARTIFACT_PATH = "app_models.joblib"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+print(BASE_DIR)
+
+MODEL_ARTIFACT_PATH = os.path.join(BASE_DIR, "..", "data", "app_models.joblib")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

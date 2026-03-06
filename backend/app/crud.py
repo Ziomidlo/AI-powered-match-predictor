@@ -1,8 +1,10 @@
 from typing import Any, Dict, Optional
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
-from models import League, LearningFeature, Match, PredictedMatch, Season, SeasonStats, Team
-from schemas import PredictedMatchCreate, PredictedMatchPredictionResult
+from app.models import League, LearningFeature, Match, PredictedMatch, Season, SeasonStats, Team
+from app.schemas import PredictedMatchCreate, PredictedMatchPredictionResult
+
+trained_ml_models = {}
 
 def get_season(db: Session, season_id: int):
     return db.query(Season).filter(Season.id == season_id).first()

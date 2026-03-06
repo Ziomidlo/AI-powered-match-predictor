@@ -2,8 +2,8 @@
 from sqlite3 import IntegrityError
 import pandas as pd
 from sqlalchemy.orm import Session
-from models import League, LearningFeature, Match, PredictedMatch, Season, SeasonStats, Team
-from database import SessionLocal
+from backend.app.models import League, LearningFeature, Match, PredictedMatch, Season, SeasonStats, Team
+from backend.app.database import SessionLocal
 
 db: Session = SessionLocal()
 

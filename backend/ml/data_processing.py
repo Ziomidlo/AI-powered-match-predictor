@@ -5,10 +5,10 @@ from sqlite3 import IntegrityError
 from dotenv import load_dotenv
 import pandas as pd
 import requests
-from features import FeatureEngineer
-from match_repository import MatchRepository
-from stats_repository import TeamStatsRepository
-from api_adapter import ApiAdapter
+from backend.ml.features import FeatureEngineer
+from backend.ml.match_repository import MatchRepository
+from backend.ml.stats_repository import TeamStatsRepository
+from backend.ml.api_adapter import ApiAdapter
 
 class KaggleAdapter:
    def __init__(self, filepath):

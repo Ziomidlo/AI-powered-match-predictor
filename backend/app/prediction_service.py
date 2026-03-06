@@ -3,9 +3,15 @@ from fastapi import HTTPException
 from sklearn.pipeline import Pipeline
 from sqlalchemy.orm import Session
 import pandas as pd
-from crud import get_recent_matches, get_h2h_matches, get_home_matches, get_average_home_xg_for_team, get_average_away_xg_for_team, get_average_learning_features_for_team, get_team
-from models import Team, PredictedMatch as PredictedMatchDB
-from data_learning import trained_ml_models, TRAINING_FEATURE_COLUMNS
+from app.crud import trained_ml_models, get_recent_matches, get_h2h_matches, get_home_matches, get_average_home_xg_for_team, get_average_away_xg_for_team, get_average_learning_features_for_team, get_team
+from app.models import Team, PredictedMatch as PredictedMatchDB
+
+TRAINING_FEATURE_COLUMNS= ['home_xG_avg', 'away_xG_avg','goal_diff_delta', 'home_team_strength', 'away_team_strength', 
+                     'h2h_home_wins', 'h2h_away_wins', 'h2h_draws', 'h2h_home_goals', 'h2h_away_goals', 
+                     'venue_home_wins','venue_away_wins', 'venue_draws', 'venue_avg_home_goals', 'venue_avg_away_goals',
+                     'home_defense_strength', 'away_defense_strength', 'home_offensive_strength', 'away_offensive_strength', 'home_passing_and_control_strength', 
+                     'away_passing_and_control_strength', 'home_team_power_index', 'away_team_power_index', 'home_avg_points_per_game', 'away_avg_points_per_game',
+                     'home_avg_position_ovr', 'away_avg_position_ovr']
 
 def calculate_form_db(db: Session, team_id: int) -> float:
     past_matches_orms = get_recent_matches(

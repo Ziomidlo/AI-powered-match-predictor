@@ -23,7 +23,9 @@ teamNameMapping = {
     "Southampton": "Southampton FC",
     "Tottenham": "Tottenham Hotspur FC",
     "West Ham": "West Ham United FC",
-    "Wolves": "Wolverhampton Wanderers FC"
+    "Wolves": "Wolverhampton Wanderers FC",
+    "Burnley" : "Burnley FC",
+    "Leeds United" : "Leeds United FC"
 }
 
 venueNameMapping = {
@@ -35,7 +37,7 @@ os.makedirs("cleaned_data", exist_ok=True)
 selectedSeasons = ["2020/2021", "2021/2022", "2022/2023", "2023/2024"]
 
 teamsDf = pd.read_csv("cleaned_data/teams.csv")
-#teamsDf['Team'] = teamsDf['Team'].replace(teamNameMapping)
+teamsDf['Team'] = teamsDf['Team'].replace(teamNameMapping)
 teamsDf.info()
 teamMapping = dict(zip(teamsDf['Team'], teamsDf['Id']))
 
